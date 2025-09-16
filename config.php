@@ -9,12 +9,21 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // ---------- Base URL ----------
 if (!defined('BASE_URL')) {
-  $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-  $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
-  $base   = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/\\');
-  $base   = $base === '' ? '/' : $base . '/';
-  define('BASE_URL', $scheme . '://' . $host . $base);
+  $envBase = getenv('BASE_URL'); // prefer env if provided
+  if ($envBase) {
+    // normalize: ensure trailing slash
+    $envBase = rtrim($envBase, '/') . '/';
+    define('BASE_URL', $envBase);
+  } else {
+    // infer from request
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $base   = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/\\');
+    $base   = $base === '' ? '/' : $base . '/';
+    define('BASE_URL', $scheme . '://' . $host . $base);
+  }
 }
+
 
 // ---------- HTML escape ----------
 if (!function_exists('e')) {
@@ -24,40 +33,44 @@ if (!function_exists('e')) {
 }
 
 // ---------- Database (PDO Postgres) ----------
+// ---------- Database (PDO Postgres) ----------
 if (!function_exists('db')) {
   function db(): PDO {
     static $pdo = null;
     if ($pdo) return $pdo;
 
-    $dsn  = getenv('DATABASE_URL') ?: getenv('PGURL') ?: '';
-    $user = getenv('DB_USER') ?: getenv('PGUSER') ?: '';
-    $pass = getenv('DB_PASS') ?: getenv('PGPASSWORD') ?: '';
+    // 1) Heroku/Railway style DATABASE_URL takes priority
+    $dsnUrl = getenv('DATABASE_URL') ?: getenv('PGURL') ?: '';
 
-    if ($dsn && str_starts_with($dsn, 'postgres')) {
-      $parts = parse_url($dsn);
-      $host  = $parts['host'] ?? 'localhost';
-      $port  = $parts['port'] ?? 5432;
-      $dbname= ltrim($parts['path'] ?? '/postgres', '/');
-      $user  = $parts['user'] ?? $user;
-      $pass  = $parts['pass'] ?? $pass;
+    if ($dsnUrl && str_starts_with($dsnUrl, 'postgres')) {
+      $parts = parse_url($dsnUrl);
+      $host   = $parts['host'] ?? 'localhost';
+      $port   = $parts['port'] ?? 5432;
+      $dbname = ltrim($parts['path'] ?? '/postgres', '/');
+      $user   = $parts['user'] ?? '';
+      $pass   = $parts['pass'] ?? '';
       $pdo = new PDO("pgsql:host=$host;port=$port;dbname=$dbname", $user, $pass, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
       ]);
-    } else {
-      $host  = getenv('DB_HOST') ?: 'localhost';
-      $port  = getenv('DB_PORT') ?: '5432';
-      $name  = getenv('DB_NAME') ?: 'postgres';
-      $user  = $user ?: 'postgres';
-      $pass  = $pass ?: '';
-      $pdo = new PDO("pgsql:host=$host;port=$port;dbname=$name", $user, $pass, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-      ]);
+      return $pdo;
     }
+
+    // 2) Support BOTH standard libpq names and your PG_* names
+    $host = getenv('PGHOST')      ?: getenv('PG_HOST') ?: getenv('DB_HOST') ?: 'localhost';
+    $port = getenv('PGPORT')      ?: getenv('PG_PORT') ?: getenv('DB_PORT') ?: '5432';
+    $name = getenv('PGDATABASE')  ?: getenv('PG_DB')   ?: getenv('DB_NAME') ?: 'postgres';
+    $user = getenv('PGUSER')      ?: getenv('PG_USER') ?: getenv('DB_USER') ?: 'postgres';
+    $pass = getenv('PGPASSWORD')  ?: getenv('PG_PASS') ?: getenv('DB_PASS') ?: '';
+
+    $pdo = new PDO("pgsql:host=$host;port=$port;dbname=$name", $user, $pass, [
+      PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+      PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    ]);
     return $pdo;
   }
 }
+
 
 // ---------- CSRF ----------
 if (!function_exists('csrf_token')) {

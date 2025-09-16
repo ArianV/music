@@ -5,7 +5,9 @@
   <meta charset="utf-8">
   <title><?= e($title ?? 'Music Landing') ?></title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="<?= BASE_URL ?>assets/styles.css">
+  <base href="<?= e(BASE_URL) ?>">
+  <link rel="stylesheet" href="assets/app.css">
+
   <?= $head ?? '' ?>
 </head>
 <body class="layout">
