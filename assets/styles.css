@@ -86,3 +86,22 @@ body.layout {
   .tbl td.actions .sep{ display:none; }
   .tbl code{ font-size:12px; word-break:break-all; }
 }
+
+/* Service pills (shared) */
+.btn-pill{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:999px;text-decoration:none;font-weight:700;font-size:14px;line-height:1;border:1px solid transparent;transition:filter .15s ease}
+.btn-pill .icon{width:16px;height:16px;fill:currentColor}
+.btn-pill:hover{filter:brightness(1.05)}
+
+/* Individual services */
+.btn-svc-spotify   { background:#1DB954; color:#0b0b0c; }
+.btn-svc-apple     { background:#fa2d48; color:#fff; }
+.btn-svc-soundcloud{ background:#ff5500; color:#fff; }
+.btn-svc-amazon    { background:#3b29ff; color:#fff; }
+.btn-svc-youtube   { background:#ff0000; color:#fff; }
+.btn-svc-tidal     { background:#0b0b0c; color:#e5e7eb; border-color:#2a3344; border-width:1px; }
+.btn-svc-deezer    { background:#00a0f0; color:#fff; }
+.btn-svc-bandcamp  { background:#1e9d8b; color:#0b0b0c; }
+.btn-svc-audiomack { background:#ffb300; color:#0b0b0c; }
+
+/* Fallback */
+.btn-default { background:#2563eb; color:#fff; }
