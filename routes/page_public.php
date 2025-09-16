@@ -1,50 +1,117 @@
 <?php
-// ====== page_public.php ======
+// routes/page_public.php — supports /@{handle}/{slug} and /pages/{slug-or-id}
 require_once __DIR__ . '/../config.php';
 
-// Resolve key from URL or ?id=
-$path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? '';
-$key  = null;
-if (preg_match('#/pages/([^/]+)/?$#', $path, $m)) {
-  $key = rawurldecode($m[1]);
-} elseif (isset($_GET['id'])) {
-  $key = $_GET['id'];
-}
-if ($key === null || $key === '') { http_response_code(404); exit('Not found'); }
-
-$pdo  = db();
-$page = null;
-
-if (ctype_digit((string)$key)) {
-  $st = $pdo->prepare("SELECT p.*, u.id AS owner_id FROM pages p LEFT JOIN users u ON u.id=p.user_id WHERE p.id = :id");
-  $st->execute([':id' => (int)$key]);
-  $page = $st->fetch();
-} else {
-  $st = $pdo->prepare("SELECT p.*, u.id AS owner_id FROM pages p LEFT JOIN users u ON u.id=p.user_id WHERE p.slug = :slug");
-  $st->execute([':slug' => $key]);
-  $page = $st->fetch();
-  if (!$page) {
-    $norm = slugify($key);
-    if ($norm !== $key) {
-      $st = $pdo->prepare("SELECT p.*, u.id AS owner_id FROM pages p LEFT JOIN users u ON u.id=p.user_id WHERE p.slug = :slug");
-      $st->execute([':slug' => $norm]);
-      $page = $st->fetch();
+// -------- helpers (guarded) --------
+if (!function_exists('find_user_by_handle')) {
+  function find_user_by_handle(PDO $pdo, string $handle): ?array {
+    // Try common columns for a “handle”
+    foreach (['username','handle','slug','name'] as $col) {
+      if (table_has_column($pdo, 'users', $col)) {
+        $st = $pdo->prepare("SELECT * FROM users WHERE lower($col) = lower(:h) LIMIT 1");
+        $st->execute([':h' => $handle]);
+        $u = $st->fetch(PDO::FETCH_ASSOC);
+        if ($u) return $u;
+      }
     }
+    return null;
   }
 }
+
+// -------- resolve handle + key from URL or router --------
+$path   = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? '';
+$handle = $GLOBALS['handle']   ?? null; // from router (if present)
+$key    = $GLOBALS['page_key'] ?? null; // from router (if present)
+
+if (!$handle || !$key) {
+  // Try to parse if router didn't set them
+  if (preg_match('#^/@([^/]+)/([^/]+)/?$#', $path, $m)) {
+    $handle = rawurldecode($m[1]);
+    $key    = rawurldecode($m[2]);
+  } elseif (!$key && preg_match('#^/pages/([^/]+)/?$#', $path, $m)) {
+    $key = rawurldecode($m[1]);
+  }
+}
+
+if (!$key && !$handle) { http_response_code(404); exit('Not found'); }
+
+$pdo = db();
+$page = null;
+$owner = null;
+
+// -------- lookup logic --------
+if ($handle) {
+  // 1) resolve the user
+  $owner = find_user_by_handle($pdo, $handle);
+  if (!$owner) { http_response_code(404); exit('Not found'); }
+
+  // 2) load the page for that user by slug or id
+  if (ctype_digit((string)$key)) {
+    $st = $pdo->prepare("SELECT p.*, u.id AS owner_id
+                         FROM pages p JOIN users u ON u.id = p.user_id
+                         WHERE p.id = :id AND p.user_id = :uid");
+    $st->execute([':id' => (int)$key, ':uid' => (int)$owner['id']]);
+  } else {
+    // try exact slug, then normalized slug
+    $st = $pdo->prepare("SELECT p.*, u.id AS owner_id
+                         FROM pages p JOIN users u ON u.id = p.user_id
+                         WHERE p.slug = :slug AND p.user_id = :uid");
+    $st->execute([':slug' => $key, ':uid' => (int)$owner['id']]);
+    $page = $st->fetch();
+
+    if (!$page) {
+      $norm = slugify($key);
+      if ($norm !== $key) {
+        $st = $pdo->prepare("SELECT p.*, u.id AS owner_id
+                             FROM pages p JOIN users u ON u.id = p.user_id
+                             WHERE p.slug = :slug AND p.user_id = :uid");
+        $st->execute([':slug' => $norm, ':uid' => (int)$owner['id']]);
+      }
+    }
+  }
+  if (!$page) $page = $st->fetch();
+} else {
+  // legacy: /pages/{slug-or-id} (no handle)
+  if (ctype_digit((string)$key)) {
+    $st = $pdo->prepare("SELECT p.*, u.id AS owner_id
+                         FROM pages p LEFT JOIN users u ON u.id = p.user_id
+                         WHERE p.id = :id");
+    $st->execute([':id' => (int)$key]);
+  } else {
+    $st = $pdo->prepare("SELECT p.*, u.id AS owner_id
+                         FROM pages p LEFT JOIN users u ON u.id = p.user_id
+                         WHERE p.slug = :slug");
+    $st->execute([':slug' => $key]);
+    $page = $st->fetch();
+
+    if (!$page) {
+      $norm = slugify($key);
+      if ($norm !== $key) {
+        $st = $pdo->prepare("SELECT p.*, u.id AS owner_id
+                             FROM pages p LEFT JOIN users u ON u.id = p.user_id
+                             WHERE p.slug = :slug");
+        $st->execute([':slug' => $norm]);
+      }
+    }
+  }
+  if (!$page) $page = $st->fetch();
+}
+
 if (!$page) { http_response_code(404); exit('Not found'); }
 
-$owner_id  = (int)($page['owner_id'] ?? 0);
+// -------- visibility: only owner can view unpublished --------
+$owner_id  = (int)($page['owner_id'] ?? $page['user_id'] ?? 0);
 $viewer_id = (int)(current_user()['id'] ?? 0);
 $is_owner  = $owner_id && $owner_id === $viewer_id;
 $is_public = (int)($page['published'] ?? 0) === 1;
+
 if (!$is_public && !$is_owner) { http_response_code(404); exit('Not found'); }
 
+// -------- render --------
 $title   = trim((string)($page['title'] ?? 'Untitled'));
 $artist  = trim((string)($page['artist_name'] ?? $page['artist'] ?? ''));
 $cover   = page_cover($page);
 $links   = json_decode($page['links_json'] ?? '[]', true) ?: [];
-
 $meta_title = $title . ($artist ? " · $artist" : '');
 $meta_desc  = $artist ? "$artist — $title" : $title;
 ?>
@@ -54,7 +121,7 @@ $meta_desc  = $artist ? "$artist — $title" : $title;
   <meta charset="utf-8">
   <title><?= e($meta_title) ?></title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <base href="<?= e(BASE_URL) ?>">
+  <link rel="stylesheet" href="<?= e(asset('assets/styles.css')) ?>">
   <meta name="description" content="<?= e($meta_desc) ?>">
   <?php if ($cover): ?>
     <meta property="og:image" content="<?= e($cover) ?>">
@@ -64,46 +131,29 @@ $meta_desc  = $artist ? "$artist — $title" : $title;
   <meta property="og:description" content="<?= e($meta_desc) ?>">
   <meta property="og:type" content="website">
   <style>
-    :root {
-      --bg: #0b0b0c;
-      --panel: #191c22;
-      --border: #232938;
-      --muted: #a1a1aa;
-      --text: #e5e7eb;
-      --brand: #1DB954; /* Spotify */
-      --primary: #2563eb;
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
-    header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#111318;border-bottom:1px solid #1f2430;position:sticky;top:0;z-index:10}
-    header .brand{font-weight:700;color:#64f0be}
-    header nav a{color:#64f0be;text-decoration:none;margin-left:14px}
-
-    main{max-width:960px;margin:40px auto;padding:0 16px;display:flex;justify-content:center}
-    .card{width:280px;padding:16px;border-radius:16px;background:var(--panel);border:1px solid var(--border);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+    /* minimal card styles to keep consistent */
+    .card{width:280px;padding:16px;border-radius:16px;background:#191c22;border:1px solid #232938;box-shadow:0 6px 20px rgba(0,0,0,.25);margin:40px auto}
     .card-media{width:100%;aspect-ratio:1/1;border-radius:12px;overflow:hidden;background:#0f1217;margin-bottom:12px}
     .card .cover{width:100%;height:100%;object-fit:cover;display:block}
     .card .placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px}
-
     .title{font-weight:800;font-size:26px;margin:4px 0 0}
-    .artist{color:var(--muted);font-size:13px;margin:6px 0 14px}
-
+    .artist{color:#a1a1aa;font-size:13px;margin:6px 0 14px}
     .links{display:flex;flex-wrap:wrap;gap:10px}
     .btn-pill{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:999px;text-decoration:none;font-weight:700;font-size:14px;line-height:1;border:1px solid transparent;transition:filter .15s ease}
     .btn-pill .icon{width:16px;height:16px;fill:currentColor}
-    .btn-spotify{background:var(--brand);color:#0b0b0c}
+    .btn-spotify{background:#1DB954;color:#0b0b0c}
     .btn-spotify:hover{filter:brightness(1.05)}
-    .btn-default{background:var(--primary);color:#fff}
+    .btn-default{background:#2563eb;color:#fff}
     .btn-default:hover{filter:brightness(1.05)}
-
-    footer{padding:14px 16px;color:#9ca3af;border-top:1px solid #1f2430;background:#111318}
+    .topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:#111318;border-bottom:1px solid #1f2430}
+    .brand{font-weight:700;color:#64f0be;text-decoration:none}
+    .nav a{color:#93c5fd;text-decoration:none;margin-left:14px}
   </style>
 </head>
 <body>
-<header>
-  <div class="brand">Music Landing</div>
-  <nav>
+<header class="topbar">
+  <a class="brand" href="<?= e(BASE_URL) ?>">Music Landing</a>
+  <nav class="nav">
     <?php if ($is_owner): ?>
       <a href="<?= e(BASE_URL) ?>dashboard">Dashboard</a>
       <a href="<?= e(BASE_URL) ?>pages/<?= e($page['slug'] ?? $page['id']) ?>/edit">Edit</a>
@@ -151,9 +201,5 @@ $meta_desc  = $artist ? "$artist — $title" : $title;
     <?php endif; ?>
   </article>
 </main>
-
-<footer>
-  © <?= date('Y') ?> Music Landing
-</footer>
 </body>
 </html>
