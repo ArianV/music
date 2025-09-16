@@ -127,8 +127,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-// 3) Render edit form
-function e($s){ return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
 ?>
 <!doctype html>
 <html lang="en">

@@ -47,7 +47,11 @@ function db(): PDO {
   }
 }
 
-function e($s){ return htmlspecialchars($s ?? '', ENT_QUOTES, 'UTF-8'); }
+if (!function_exists('e')) {
+  function e($v) {
+    return htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+  }
+}
 function csrf_token(){ if (empty($_SESSION['csrf'])) $_SESSION['csrf']=bin2hex(random_bytes(16)); return $_SESSION['csrf']; }
 function csrf_check(){ if($_SERVER['REQUEST_METHOD']==='POST' && (($_POST['csrf']??'')!==($_SESSION['csrf']??''))){ http_response_code(422); exit('Invalid CSRF token'); } }
 function current_user(){
