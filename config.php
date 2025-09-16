@@ -149,3 +149,14 @@ if (!function_exists('log_msg')) {
     error_log($msg);
   }
 }
+
+if (!function_exists('route')) {
+  function route(string $path, string $file): void {
+    $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    if ($uri === $path) {
+      require __DIR__ . '/' . ltrim($file, '/');
+      exit;
+    }
+  }
+}
+

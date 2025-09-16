@@ -65,6 +65,18 @@ if (!function_exists('download_image_to_uploads')) {
   }
 }
 
+if (!function_exists('route_regex')) {
+  function route_regex(string $pattern, string $file, array &$matches = []): void {
+    $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    if (preg_match($pattern, $uri, $m)) {
+      $matches = $m;
+      require __DIR__ . '/' . ltrim($file, '/');
+      exit;
+    }
+  }
+}
+
+
 // ---------- Resolve {id|slug} from URL or legacy $page_id ----------
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? '';
 $key  = null;
