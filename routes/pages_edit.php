@@ -1,7 +1,7 @@
 <?php
-// pages_edit.php — drop-in that supports /pages/{id}/edit and /pages/{slug}/edit
-// Assumes these exist elsewhere: require_auth(), csrf_check(), current_user(), db(), e(), csrf_token()
-// Assumes BASE_URL, UPLOAD_DIR, UPLOAD_URI are defined in config/bootstrap loaded via require_once.
+// pages_edit.php — supports /pages/{id}/edit and /pages/{slug}/edit, Publish toggle, and cover uploads
+// Requires: require_auth(), csrf_check(), current_user(), db(), e(), csrf_token(), BASE_URL
+// Also set in config.php (example below): UPLOAD_DIR, UPLOAD_URI
 
 require_auth();
 csrf_check();
@@ -9,14 +9,13 @@ csrf_check();
 $user = current_user();
 if (!$user) { header('Location: ' . BASE_URL . 'login'); exit; }
 
-// --------------------- Polyfills / helpers (guarded) ---------------------
+// ---------- Helpers (guarded) ----------
 if (!function_exists('slugify')) {
   function slugify(string $s): string {
     $s = strtolower(preg_replace('/[^a-z0-9]+/', '-', $s));
     return trim($s, '-');
   }
 }
-
 if (!function_exists('table_has_column')) {
   function table_has_column(PDO $pdo, string $table, string $col): bool {
     static $cache = [];
@@ -34,7 +33,6 @@ if (!function_exists('table_has_column')) {
     return in_array(strtolower($col), $cache[$key], true);
   }
 }
-
 if (!function_exists('parse_links_to_json')) {
   function parse_links_to_json(?string $raw): string {
     $raw = (string)$raw;
@@ -49,10 +47,12 @@ if (!function_exists('parse_links_to_json')) {
     return json_encode($out, JSON_UNESCAPED_SLASHES);
   }
 }
-
 if (!function_exists('download_image_to_uploads')) {
   function download_image_to_uploads(string $url): ?string {
     if (!defined('UPLOAD_DIR') || !defined('UPLOAD_URI')) return null;
+    if (!is_dir(UPLOAD_DIR)) @mkdir(UPLOAD_DIR, 0775, true);
+    if (!is_writable(UPLOAD_DIR)) return null;
+
     $bin = function_exists('http_get') ? @http_get($url, 6000) : @file_get_contents($url);
     if (!$bin) return null;
     $ext = '.jpg';
@@ -65,39 +65,28 @@ if (!function_exists('download_image_to_uploads')) {
   }
 }
 
-// --------------------- Resolve route key (id or slug) ---------------------
+// ---------- Resolve {id|slug} from URL or legacy $page_id ----------
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? '';
 $key  = null;
-
-// Prefer pulling from the URL (works even if upstream router doesn't pass $page_id)
 if (preg_match('#^/pages/([^/]+)/edit$#', $path, $m)) {
   $key = rawurldecode($m[1]);
 } elseif (isset($page_id)) {
-  // legacy: populated by index.php router
   $key = $page_id;
 }
+if ($key === null || $key === '') { http_response_code(404); exit('Page not found'); }
 
-if ($key === null || $key === '') {
-  http_response_code(404); exit('Page not found');
-}
-
-// --------------------- Load page (scoped to current user) ---------------------
+// ---------- Load current page ----------
 $pdo = db();
-$page = null;
-$page_id_int = null;
+$page = null; $page_id_int = null;
 
 if (ctype_digit((string)$key)) {
   $st = $pdo->prepare("SELECT * FROM pages WHERE id = :id AND user_id = :uid");
   $st->execute([':id' => (int)$key, ':uid' => $user['id']]);
   $page = $st->fetch(PDO::FETCH_ASSOC);
-  if ($page) $page_id_int = (int)$page['id'];
 } else {
-  // exact slug first
   $st = $pdo->prepare("SELECT * FROM pages WHERE slug = :slug AND user_id = :uid");
   $st->execute([':slug' => $key, ':uid' => $user['id']]);
   $page = $st->fetch(PDO::FETCH_ASSOC);
-
-  // fallback: normalized slug (handles older/different slug strategies)
   if (!$page) {
     $norm = slugify($key);
     if ($norm !== $key) {
@@ -106,34 +95,44 @@ if (ctype_digit((string)$key)) {
       $page = $st->fetch(PDO::FETCH_ASSOC);
     }
   }
-  if ($page) $page_id_int = (int)$page['id'];
 }
+if (!$page) { http_response_code(404); exit('Page not found'); }
+$page_id_int = (int)$page['id'];
 
-if (!$page || !$page_id_int) {
-  http_response_code(404); exit('Page not found');
-}
-
-// --------------------- Current values ---------------------
+// ---------- Current values ----------
 $artist_val = $page['artist_name'] ?? $page['artist'] ?? '';
 $cover_val  = $page['cover_uri'] ?? $page['cover_url'] ?? $page['cover_image'] ?? null;
+$published  = (int)($page['published'] ?? 0);
 
-// --------------------- Handle POST (update) ---------------------
+// ---------- Handle POST (update) ----------
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $title        = trim($_POST['title']  ?? '');
   $artistInput  = trim($_POST['artist'] ?? '');
   $links_raw    = $_POST['links_raw']   ?? '';
   $auto_img_url = trim($_POST['auto_image_url'] ?? '');
-  $cover_uri    = $cover_val; // start with current
+  $published_in = isset($_POST['published']) ? 1 : 0;
 
-  // file upload first (if provided)
+  $cover_uri = $cover_val; // default to existing
+
+  // file upload
   if (!empty($_FILES['cover']['name'] ?? '')) {
-    $safeName = time().'_'.preg_replace('/[^a-zA-Z0-9._-]/', '', $_FILES['cover']['name']);
-    $target   = rtrim(UPLOAD_DIR, '/').'/'.$safeName;
-    if (is_uploaded_file($_FILES['cover']['tmp_name'] ?? '') && @move_uploaded_file($_FILES['cover']['tmp_name'], $target)) {
-      $cover_uri = rtrim(UPLOAD_URI, '/').'/'.$safeName;
+    if (!defined('UPLOAD_DIR') || !defined('UPLOAD_URI')) {
+      error_log("UPLOAD_* not defined; cover skipped");
+    } else {
+      if (!is_dir(UPLOAD_DIR)) @mkdir(UPLOAD_DIR, 0775, true);
+      if (is_writable(UPLOAD_DIR)) {
+        $safeName = time().'_'.preg_replace('/[^a-zA-Z0-9._-]/', '', $_FILES['cover']['name']);
+        $target   = rtrim(UPLOAD_DIR, '/').'/'.$safeName;
+        if (is_uploaded_file($_FILES['cover']['tmp_name'] ?? '') && @move_uploaded_file($_FILES['cover']['tmp_name'], $target)) {
+          $cover_uri = rtrim(UPLOAD_URI, '/').'/'.$safeName;
+        } else {
+          error_log("Cover move failed to $target");
+        }
+      } else {
+        error_log("UPLOAD_DIR not writable: ".UPLOAD_DIR);
+      }
     }
   }
-
   // auto-image fallback
   if (!$cover_uri && $auto_img_url) {
     $saved = download_image_to_uploads($auto_img_url);
@@ -143,7 +142,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $links_json    = parse_links_to_json($links_raw);
   $artist_to_use = ($artistInput !== '' ? $artistInput : 'Unknown Artist');
 
-  // Build dynamic UPDATE (only set columns that exist)
+  // Build UPDATE
   $sets   = [];
   $params = [':id' => $page_id_int, ':uid' => $user['id']];
 
@@ -154,16 +153,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   if (table_has_column($pdo, 'pages', 'artist'))      { $sets[] = "artist = :artist";          $params[':artist']      = $artist_to_use; }
 
   if ($cover_uri) {
-    foreach (['cover_uri', 'cover_url', 'cover_image'] as $c) {
-      if (table_has_column($pdo, 'pages', $c)) { $sets[] = "$c = :cover"; $params[':cover'] = $cover_uri; break; }
+    foreach (['cover_uri','cover_url','cover_image'] as $c) {
+      if (table_has_column($pdo, 'pages', $c)) { $sets[]="$c = :cover"; $params[':cover'] = $cover_uri; break; }
     }
   }
 
   if (table_has_column($pdo, 'pages', 'slug')) {
-    // Prefer "Artist Title" for nicer slugs when artist present
     $for_slug = ($artist_to_use !== '' ? ($artist_to_use.' ') : '').$title;
     $sets[]   = "slug = :slug";
     $params[':slug'] = slugify($for_slug);
+  }
+
+  if (table_has_column($pdo, 'pages', 'published')) {
+    $sets[] = "published = :published";
+    $params[':published'] = $published_in;
   }
 
   if (table_has_column($pdo, 'pages', 'updated_at')) {
@@ -174,7 +177,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $upd = $pdo->prepare($sql);
   $upd->execute($params);
 
-  // After save, go back to dashboard (or you could redirect back to this edit page)
   header('Location: ' . BASE_URL . 'dashboard');
   exit;
 }
@@ -196,6 +198,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     input[type="text"],textarea{width:100%;box-sizing:border-box;background:#0f1217;border:1px solid #263142;color:#e5e7eb;border-radius:8px;padding:10px}
     textarea{min-height:120px}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .flex{display:flex;align-items:center;gap:10px}
     .btn{display:inline-block;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:10px 14px;cursor:pointer}
     .muted{color:#9ca3af;font-size:12px}
     img.cover{max-width:180px;border-radius:8px;border:1px solid #253041;display:block;margin-top:8px}
@@ -241,7 +244,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <img class="cover" src="<?= e($cover_val) ?>" alt="cover">
       <?php endif; ?>
       <input type="file" name="cover" accept="image/*">
+      <div class="muted">PNG/JPG/WEBP. If blank, we’ll keep your current image.</div>
     </div>
+
+    <?php if (table_has_column($pdo, 'pages', 'published')): ?>
+    <div class="row">
+      <label class="flex"><input type="checkbox" name="published" value="1" <?= $published ? 'checked' : '' ?>> Published</label>
+      <div class="muted">Uncheck to hide this page from public.</div>
+    </div>
+    <?php endif; ?>
 
     <div class="row">
       <button type="submit" class="btn">Save changes</button>

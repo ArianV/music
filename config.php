@@ -64,9 +64,12 @@ function current_user(){
 function require_auth(){ if(!current_user()){ header('Location: '.BASE_URL.'login'); exit; } }
 function slugify($t){ $t=preg_replace('~[^\pL\d]+~u','-',$t); $t=iconv('utf-8','us-ascii//TRANSLIT',$t); $t=preg_replace('~[^-\w]+~','',$t); $t=trim($t,'-'); $t=preg_replace('~-+~','-',$t); return strtolower($t?:'page'); }
 
-define('UPLOAD_DIR', __DIR__.'/uploads/');
-define('UPLOAD_URI', BASE_URL.'uploads/');
-if (!is_dir(UPLOAD_DIR)) @mkdir(UPLOAD_DIR, 0777, true);
+// Use your real absolute paths
+if (!defined('UPLOAD_DIR')) define('UPLOAD_DIR', __DIR__.'/uploads'); // filesystem
+if (!defined('UPLOAD_URI')) define('UPLOAD_URI', rtrim(BASE_URL, '/').'/uploads'); // public URL
+
+if (!is_dir(UPLOAD_DIR)) @mkdir(UPLOAD_DIR, 0775, true);
+
 
 // --- HTTP helpers (curl with safe fallback) ---
 function http_get(string $url, int $timeoutMs = 3000): ?string {
