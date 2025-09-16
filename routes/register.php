@@ -55,8 +55,8 @@ ob_start();
 <form method="post" style="background:#111318;border:1px solid #1f2430;border-radius:12px;padding:20px;max-width:420px;">
   <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
   <div class="row" style="margin-bottom:12px;">
-    <label style="display:block;font-size:14px;color:#a1a1aa;margin-bottom:6px">Name (optional)</label>
-    <input type="text" name="name" autocomplete="name"
+    <label style="display:block;font-size:14px;color:#a1a1aa;margin-bottom:6px">Username</label>
+    <input type="text" name="name" required autocomplete="name"
            value="<?= e($_POST['name'] ?? '') ?>"
            style="width:100%;background:#0f1217;border:1px solid #263142;color:#e5e7eb;border-radius:8px;padding:10px">
   </div>

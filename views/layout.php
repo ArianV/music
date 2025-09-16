@@ -30,7 +30,7 @@ $u = current_user();
 
 <?php if (!$hideHeader): ?>
   <header class="site-header">
-    <a class="site-brand" href="<?= e(BASE_URL) ?>">Music Landing</a>
+    <a class="site-brand" href="<?= e(BASE_URL) ?>">MusicPages</a>
     <nav class="site-nav">
       <?php if ($u): ?>
         <a href="<?= e(BASE_URL) ?>dashboard">Dashboard</a>
