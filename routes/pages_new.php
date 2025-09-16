@@ -235,7 +235,6 @@ https://youtu.be/ABC123"></textarea>
 </div>
 
 <script>
-// If you have an Auto mode resolver, set document.getElementById('auto_image_url').value = 'https://...';
 </script>
 </body>
 </html>
