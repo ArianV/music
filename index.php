@@ -6,6 +6,14 @@ error_log('ROUTE path=' . route());
 $path = route();
 $user = current_user();
 
+// /pages/{id}/edit
+if (preg_match('#^/pages/(\d+)/edit$#', $path, $m)) {
+    $page_id = (int)$m[1];
+    require __DIR__.'/routes/pages_edit.php';
+    exit;
+}
+
+
 // Routing table
 if ($path === '/' || $path === '/home') {
     require __DIR__ . '/routes/home.php';

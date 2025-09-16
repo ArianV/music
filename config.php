@@ -162,3 +162,40 @@ function split_title_artist(string $title): array {
     if (preg_match('/^(.*?)\s*[–-]\s*(.*)$/u', $title, $m)) return [trim($m[1]), trim($m[2])];
     return [trim($title), ''];
 }
+
+if (!function_exists('time_ago')) {
+    function time_ago($ts): string {
+        try {
+            if ($ts instanceof DateTimeInterface) {
+                $t = ($ts instanceof DateTimeImmutable)
+                    ? $ts
+                    : DateTimeImmutable::createFromInterface($ts);
+            } else {
+                // Accept Postgres timestamp strings like "2025-09-16 09:13:57.377181+00"
+                $t = new DateTimeImmutable((string)$ts);
+            }
+        } catch (Throwable $e) {
+            return '';
+        }
+
+        $now  = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+        $diff = $now->getTimestamp() - $t->getTimestamp();
+        if ($diff <= 0) return 'just now';
+
+        $units = [
+            ['year',   365*24*3600],
+            ['month',   30*24*3600],
+            ['day',     24*3600],
+            ['hour',        3600],
+            ['minute',        60],
+            ['second',         1],
+        ];
+        foreach ($units as [$name, $secs]) {
+            if ($diff >= $secs) {
+                $val = (int) floor($diff / $secs);
+                return $val . ' ' . $name . ($val > 1 ? 's' : '') . ' ago';
+            }
+        }
+        return 'just now';
+    }
+}
