@@ -1,7 +1,6 @@
 <?php
-// ====== config.php (drop-in) ======
-// Safe, single-place definitions and helpers for your app.
-// Works on Railway/Neon. Uses env vars if present.
+// ====== config.php (fixed drop-in) ======
+// Core config, DB, auth, helpers, and router
 
 // ---------- Session ----------
 if (session_status() === PHP_SESSION_NONE) {
@@ -10,7 +9,6 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // ---------- Base URL ----------
 if (!defined('BASE_URL')) {
-  // Try to infer BASE_URL if not defined elsewhere
   $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
   $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
   $base   = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/\\');
@@ -31,14 +29,11 @@ if (!function_exists('db')) {
     static $pdo = null;
     if ($pdo) return $pdo;
 
-    // Railway/Neon typical envs
     $dsn  = getenv('DATABASE_URL') ?: getenv('PGURL') ?: '';
     $user = getenv('DB_USER') ?: getenv('PGUSER') ?: '';
     $pass = getenv('DB_PASS') ?: getenv('PGPASSWORD') ?: '';
 
     if ($dsn && str_starts_with($dsn, 'postgres')) {
-      // DATABASE_URL form: postgres://user:pass@host:port/dbname
-      // PDO needs:        pgsql:host=...;port=...;dbname=...;user=...;password=...
       $parts = parse_url($dsn);
       $host  = $parts['host'] ?? 'localhost';
       $port  = $parts['port'] ?? 5432;
@@ -50,7 +45,6 @@ if (!function_exists('db')) {
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
       ]);
     } else {
-      // Fallback: explicit envs
       $host  = getenv('DB_HOST') ?: 'localhost';
       $port  = getenv('DB_PORT') ?: '5432';
       $name  = getenv('DB_NAME') ?: 'postgres';
@@ -104,7 +98,6 @@ if (!function_exists('require_auth')) {
 
 // ---------- Uploads (cover images) ----------
 if (!defined('UPLOAD_DIR')) {
-  // Put uploads inside your public web root
   define('UPLOAD_DIR', __DIR__ . '/uploads');
 }
 if (!defined('UPLOAD_URI')) {
@@ -114,7 +107,7 @@ if (!is_dir(UPLOAD_DIR)) {
   @mkdir(UPLOAD_DIR, 0775, true);
 }
 
-// ---------- Reusable helpers ----------
+// ---------- Misc helpers ----------
 if (!function_exists('page_cover')) {
   function page_cover(array $row): ?string {
     return $row['cover_uri'] ?? $row['cover_url'] ?? $row['cover_image'] ?? null;
@@ -142,21 +135,54 @@ if (!function_exists('table_has_column')) {
     return in_array(strtolower($col), $cache[$key], true);
   }
 }
-
-// ---------- Error logging shortcut ----------
 if (!function_exists('log_msg')) {
   function log_msg(string $msg): void {
     error_log($msg);
   }
 }
 
+// ---------- Router ----------
+if (!isset($GLOBALS['__ROUTES'])) {
+  $GLOBALS['__ROUTES'] = ['exact' => [], 'regex' => []];
+}
+
 if (!function_exists('route')) {
-  function route(string $path, string $file): void {
-    $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-    if ($uri === $path) {
-      require __DIR__ . '/' . ltrim($file, '/');
-      exit;
+  function route(?string $path = null, ?string $file = null): void {
+    if ($path !== null && $file !== null) {
+      $GLOBALS['__ROUTES']['exact'][] = ['path' => $path, 'file' => $file];
+      return;
     }
+    route_dispatch();
   }
 }
 
+if (!function_exists('route_regex')) {
+  function route_regex(string $pattern, string $file, array $varsMap = []): void {
+    $GLOBALS['__ROUTES']['regex'][] = ['pattern' => $pattern, 'file' => $file, 'vars' => $varsMap];
+  }
+}
+
+if (!function_exists('route_dispatch')) {
+  function route_dispatch(): void {
+    $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?? '/';
+
+    foreach ($GLOBALS['__ROUTES']['exact'] as $r) {
+      if ($uri === $r['path']) {
+        require __DIR__ . '/' . ltrim($r['file'], '/');
+        exit;
+      }
+    }
+    foreach ($GLOBALS['__ROUTES']['regex'] as $r) {
+      if (preg_match($r['pattern'], $uri, $m)) {
+        foreach ($r['vars'] as $name => $idx) {
+          $GLOBALS[$name] = $m[$idx] ?? null;
+        }
+        require __DIR__ . '/' . ltrim($r['file'], '/');
+        exit;
+      }
+    }
+    http_response_code(404);
+    echo 'Not Found';
+    exit;
+  }
+}

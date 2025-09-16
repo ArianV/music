@@ -1,36 +1,17 @@
 <?php
-// pages_edit.php — supports /pages/{id}/edit and /pages/{slug}/edit, Publish toggle, and cover uploads
-// Requires: require_auth(), csrf_check(), current_user(), db(), e(), csrf_token(), BASE_URL
-// Also set in config.php (example below): UPLOAD_DIR, UPLOAD_URI
-
+// ====== pages_edit.php ======
+require_once __DIR__ . '/config.php';
 require_auth();
 csrf_check();
 
 $user = current_user();
 if (!$user) { header('Location: ' . BASE_URL . 'login'); exit; }
 
-// ---------- Helpers (guarded) ----------
+// Polyfills (guarded)
 if (!function_exists('slugify')) {
   function slugify(string $s): string {
     $s = strtolower(preg_replace('/[^a-z0-9]+/', '-', $s));
     return trim($s, '-');
-  }
-}
-if (!function_exists('table_has_column')) {
-  function table_has_column(PDO $pdo, string $table, string $col): bool {
-    static $cache = [];
-    $key = strtolower($table);
-    if (!isset($cache[$key])) {
-      $st = db()->prepare("
-        SELECT lower(column_name) AS c
-        FROM information_schema.columns
-        WHERE table_schema = current_schema()
-          AND table_name = :t
-      ");
-      $st->execute([':t' => $table]);
-      $cache[$key] = array_column($st->fetchAll(PDO::FETCH_ASSOC), 'c');
-    }
-    return in_array(strtolower($col), $cache[$key], true);
   }
 }
 if (!function_exists('parse_links_to_json')) {
@@ -65,19 +46,7 @@ if (!function_exists('download_image_to_uploads')) {
   }
 }
 
-if (!function_exists('route_regex')) {
-  function route_regex(string $pattern, string $file, array &$matches = []): void {
-    $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-    if (preg_match($pattern, $uri, $m)) {
-      $matches = $m;
-      require __DIR__ . '/' . ltrim($file, '/');
-      exit;
-    }
-  }
-}
-
-
-// ---------- Resolve {id|slug} from URL or legacy $page_id ----------
+// Resolve key from URL or provided $page_id
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? '';
 $key  = null;
 if (preg_match('#^/pages/([^/]+)/edit$#', $path, $m)) {
@@ -87,9 +56,9 @@ if (preg_match('#^/pages/([^/]+)/edit$#', $path, $m)) {
 }
 if ($key === null || $key === '') { http_response_code(404); exit('Page not found'); }
 
-// ---------- Load current page ----------
+// Load page (scoped to user)
 $pdo = db();
-$page = null; $page_id_int = null;
+$page = null;
 
 if (ctype_digit((string)$key)) {
   $st = $pdo->prepare("SELECT * FROM pages WHERE id = :id AND user_id = :uid");
@@ -111,12 +80,11 @@ if (ctype_digit((string)$key)) {
 if (!$page) { http_response_code(404); exit('Page not found'); }
 $page_id_int = (int)$page['id'];
 
-// ---------- Current values ----------
 $artist_val = $page['artist_name'] ?? $page['artist'] ?? '';
 $cover_val  = $page['cover_uri'] ?? $page['cover_url'] ?? $page['cover_image'] ?? null;
 $published  = (int)($page['published'] ?? 0);
 
-// ---------- Handle POST (update) ----------
+// Handle POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $title        = trim($_POST['title']  ?? '');
   $artistInput  = trim($_POST['artist'] ?? '');
@@ -124,9 +92,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $auto_img_url = trim($_POST['auto_image_url'] ?? '');
   $published_in = isset($_POST['published']) ? 1 : 0;
 
-  $cover_uri = $cover_val; // default to existing
+  $cover_uri = $cover_val;
 
-  // file upload
   if (!empty($_FILES['cover']['name'] ?? '')) {
     if (!defined('UPLOAD_DIR') || !defined('UPLOAD_URI')) {
       error_log("UPLOAD_* not defined; cover skipped");
@@ -145,7 +112,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
     }
   }
-  // auto-image fallback
   if (!$cover_uri && $auto_img_url) {
     $saved = download_image_to_uploads($auto_img_url);
     if ($saved) $cover_uri = $saved;
@@ -154,7 +120,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $links_json    = parse_links_to_json($links_raw);
   $artist_to_use = ($artistInput !== '' ? $artistInput : 'Unknown Artist');
 
-  // Build UPDATE
   $sets   = [];
   $params = [':id' => $page_id_int, ':uid' => $user['id']];
 
@@ -166,7 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   if ($cover_uri) {
     foreach (['cover_uri','cover_url','cover_image'] as $c) {
-      if (table_has_column($pdo, 'pages', $c)) { $sets[]="$c = :cover"; $params[':cover'] = $cover_uri; break; }
+      if (table_has_column($pdo, 'pages', $c)) { $sets[]="$c = :cover"; $params[':cover']=$cover_uri; break; }
     }
   }
 
@@ -199,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta charset="utf-8">
   <title>Edit page</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <base href="<?= e(BASE_URL) ?>"><!-- fixes relative asset paths -->
+  <base href="<?= e(BASE_URL) ?>">
   <style>
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;margin:0;background:#0b0b0c;color:#e5e7eb}
     .wrap{max-width:860px;margin:40px auto;padding:0 16px}
