@@ -1,6 +1,6 @@
 <?php
 // ====== page_public.php ======
-require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/../config.php';
 
 // Resolve key from URL or ?id=
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? '';

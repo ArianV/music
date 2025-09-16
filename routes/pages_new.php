@@ -1,6 +1,6 @@
 <?php
 // ====== pages_new.php ======
-require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/../config.php';
 require_auth();
 csrf_check();
 
