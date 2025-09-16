@@ -64,8 +64,8 @@ define('UPLOAD_DIR', __DIR__.'/uploads/');
 define('UPLOAD_URI', BASE_URL.'uploads/');
 if (!is_dir(UPLOAD_DIR)) @mkdir(UPLOAD_DIR, 0777, true);
 
-function http_get(string $url, int $timeoutMs = 2500) {
-    // Prefer PHP cURL if available
+// --- HTTP helpers (curl with safe fallback) ---
+function http_get(string $url, int $timeoutMs = 3000): ?string {
     if (function_exists('curl_init')) {
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -73,26 +73,25 @@ function http_get(string $url, int $timeoutMs = 2500) {
             CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_TIMEOUT_MS     => $timeoutMs,
             CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_USERAGENT      => 'MusicLanding/1.0'
+            CURLOPT_USERAGENT      => 'MusicPages/1.0'
         ]);
         $body = curl_exec($ch);
         curl_close($ch);
         return $body ?: null;
     }
-    // Fallback: streams
-    $context = stream_context_create([
+    $ctx = stream_context_create([
         'http' => [
             'method'  => 'GET',
             'timeout' => max(1, (int)ceil($timeoutMs/1000)),
-            'header'  => "User-Agent: MusicLanding/1.0\r\n",
+            'header'  => "User-Agent: MusicPages/1.0\r\n",
         ],
-        'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+        'ssl' => ['verify_peer'=>true,'verify_peer_name'=>true],
     ]);
-    $body = @file_get_contents($url, false, $context);
+    $body = @file_get_contents($url, false, $ctx);
     return $body !== false ? $body : null;
 }
 
-function http_get_json(string $url, int $timeoutMs = 2500) {
+function http_get_json(string $url, int $timeoutMs = 3000): ?array {
     if (function_exists('curl_init')) {
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -101,22 +100,65 @@ function http_get_json(string $url, int $timeoutMs = 2500) {
             CURLOPT_TIMEOUT_MS     => $timeoutMs,
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_HTTPHEADER     => ['Accept: application/json'],
-            CURLOPT_USERAGENT      => 'MusicLanding/1.0'
+            CURLOPT_USERAGENT      => 'MusicPages/1.0'
         ]);
         $body = curl_exec($ch);
         curl_close($ch);
     } else {
-        $context = stream_context_create([
+        $ctx = stream_context_create([
             'http' => [
                 'method'  => 'GET',
                 'timeout' => max(1, (int)ceil($timeoutMs/1000)),
-                'header'  => "Accept: application/json\r\nUser-Agent: MusicLanding/1.0\r\n",
+                'header'  => "Accept: application/json\r\nUser-Agent: MusicPages/1.0\r\n",
             ],
-            'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+            'ssl' => ['verify_peer'=>true,'verify_peer_name'=>true],
         ]);
-        $body = @file_get_contents($url, false, $context);
+        $body = @file_get_contents($url, false, $ctx);
     }
     if (!$body) return null;
-    $json = json_decode($body, true);
-    return is_array($json) ? $json : null;
+    $j = json_decode($body, true);
+    return is_array($j) ? $j : null;
+}
+
+// --- Turn textarea input into JSON links ---
+function parse_links_to_json(?string $raw): string {
+    $raw = (string)$raw;
+    $lines = array_values(array_filter(array_map('trim', preg_split('/\r?\n/', $raw))));
+    $out = [];
+    foreach ($lines as $line) {
+        $label = null; $url = $line;
+        if (strpos($line, '|') !== false) {
+            [$label, $url] = array_map('trim', explode('|', $line, 2));
+        }
+        if (!filter_var($url, FILTER_VALIDATE_URL)) continue;
+        $out[] = ['label' => $label ?: null, 'url' => $url];
+    }
+    return json_encode($out, JSON_UNESCAPED_SLASHES);
+}
+
+// --- Optional helpers used by auto-create ---
+function download_image_to_uploads(string $url): ?string {
+    $bin = http_get($url, 5000);
+    if (!$bin) return null;
+    $ext = '.jpg';
+    $pathPart = parse_url($url, PHP_URL_PATH) ?? '';
+    if (preg_match('/\.(png|webp|jpe?g)$/i', $pathPart, $m)) $ext = '.'.strtolower($m[1]);
+    $name = 'cover_'.time().'_'.bin2hex(random_bytes(4)).$ext;
+    $full = UPLOAD_DIR.$name;
+    if (@file_put_contents($full, $bin) === false) return null;
+    return UPLOAD_URI.$name;
+}
+
+function resolve_link_metadata(string $url): array {
+    $meta = [];
+    $html = http_get($url, 4000);
+    if ($html && preg_match('/<meta\s+property=["\']og:title["\']\s+content=["\']([^"\']+)["\']/i', $html, $m)) $meta['title'] = trim($m[1]);
+    if ($html && preg_match('/<meta\s+property=["\']og:image["\']\s+content=["\']([^"\']+)["\']/i', $html, $m)) $meta['image'] = trim($m[1]);
+    if ($html && preg_match('/<meta\s+property=["\']og:site_name["\']\s+content=["\']([^"\']+)["\']/i', $html, $m)) $meta['provider'] = trim($m[1]);
+    return $meta;
+}
+
+function split_title_artist(string $title): array {
+    if (preg_match('/^(.*?)\s*[–-]\s*(.*)$/u', $title, $m)) return [trim($m[1]), trim($m[2])];
+    return [trim($title), ''];
 }
