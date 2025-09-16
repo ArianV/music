@@ -1,0 +1,38 @@
+:root{--bg:#0b0b10;--fg:#f4f4f5;--muted:#9ca3af;--card:#15151d;--accent:#6ee7b7}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,Segoe UI,Roboto,Arial}
+a{color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:32px auto;padding:0 16px}
+.site-header,.site-footer{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;background:var(--card);position:sticky;top:0}
+.brand{font-weight:700}
+.card{background:var(--card);padding:20px;border-radius:14px}
+.form-row{display:flex;gap:12px;flex-wrap:wrap;padding: 5px;}
+input[type='text'],input[type='email'],input[type='password'],input[type='file'],textarea,select{
+  width:100%;padding:10px;border:1px solid #222;border-radius:10px;background:#0f0f16;color:var(--fg)
+}
+button,.btn{background:var(--accent);color:#0b0b10;border:0;padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer}
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{padding:10px;border-bottom:1px solid #222}
+.page-preview{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.landing{min-height:80vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,#0b0b10,#0b0b10)}
+.landing .box{max-width:560px;text-align:center}
+.link-list{display:flex;flex-direction:column;gap:12px;margin-top:16px}
+.link-item{display:flex;justify-content:space-between;background:#101018;padding:10px;border-radius:10px}
+.cover{width:100%;max-width:420px;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.small{font-size:.9rem;color:var(--muted)}
+.meta{display:flex;gap:10px;align-items:center;margin-top:8px;justify-content: center;}
+.badge{background:#0f0f16;border:1px solid #222;padding:4px 8px;border-radius:999px}
+/* Sticky footer layout */
+body.layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.container {
+  flex: 1; /* take available vertical space */
+}
+
+.site-footer {
+  margin-top: auto; /* push footer down */
+}
