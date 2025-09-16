@@ -63,3 +63,60 @@ function slugify($t){ $t=preg_replace('~[^\pL\d]+~u','-',$t); $t=iconv('utf-8','
 define('UPLOAD_DIR', __DIR__.'/uploads/');
 define('UPLOAD_URI', BASE_URL.'uploads/');
 if (!is_dir(UPLOAD_DIR)) @mkdir(UPLOAD_DIR, 0777, true);
+
+function http_get(string $url, int $timeoutMs = 2500) {
+    // Prefer PHP cURL if available
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_TIMEOUT_MS     => $timeoutMs,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_USERAGENT      => 'MusicLanding/1.0'
+        ]);
+        $body = curl_exec($ch);
+        curl_close($ch);
+        return $body ?: null;
+    }
+    // Fallback: streams
+    $context = stream_context_create([
+        'http' => [
+            'method'  => 'GET',
+            'timeout' => max(1, (int)ceil($timeoutMs/1000)),
+            'header'  => "User-Agent: MusicLanding/1.0\r\n",
+        ],
+        'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+    ]);
+    $body = @file_get_contents($url, false, $context);
+    return $body !== false ? $body : null;
+}
+
+function http_get_json(string $url, int $timeoutMs = 2500) {
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_TIMEOUT_MS     => $timeoutMs,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+            CURLOPT_USERAGENT      => 'MusicLanding/1.0'
+        ]);
+        $body = curl_exec($ch);
+        curl_close($ch);
+    } else {
+        $context = stream_context_create([
+            'http' => [
+                'method'  => 'GET',
+                'timeout' => max(1, (int)ceil($timeoutMs/1000)),
+                'header'  => "Accept: application/json\r\nUser-Agent: MusicLanding/1.0\r\n",
+            ],
+            'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+        ]);
+        $body = @file_get_contents($url, false, $context);
+    }
+    if (!$body) return null;
+    $json = json_decode($body, true);
+    return is_array($json) ? $json : null;
+}
