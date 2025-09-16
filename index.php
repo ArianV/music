@@ -25,6 +25,9 @@ route('/logout',        'routes/logout.php');
 route('/dashboard',     'routes/dashboard.php');
 route('/pages/new',     'routes/pages_new.php');
 
+// --- NEW: public pages like /@foaf/lil-uzi-vert-20-min ---
+route_regex('#^/@([^/]+)/([^/]+)/?$#', 'routes/page_public.php', ['handle' => 1, 'page_key' => 2]);
+
 // ----- regex routes -----
 route_regex('#^/pages/([^/]+)/edit$#',   'routes/pages_edit.php',   ['page_id' => 1]);
 route_regex('#^/pages/([^/]+)/delete$#', 'routes/pages_delete.php', ['page_id' => 1]);
