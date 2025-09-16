@@ -238,3 +238,56 @@ if (!function_exists('time_ago')) {
     return $future ? 'in a moment' : 'just now';
   }
 }
+
+// ---------- Slugs ----------
+if (!function_exists('slugify')) {
+  function slugify(string $s, int $maxLen = 80): string {
+    $s = html_entity_decode($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    // Common substitutions first
+    $s = str_ireplace(['&', '@', '+'], [' and ', ' at ', ' plus '], $s);
+    // Transliterate to ASCII if possible
+    if (function_exists('iconv')) {
+      $t = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $s);
+      if ($t !== false) $s = $t;
+    }
+    $s = strtolower($s);
+    // keep letters & digits, everything else -> dash
+    $s = preg_replace('/[^a-z0-9]+/i', '-', $s);
+    $s = trim($s, '-');
+    // collapse repeated dashes
+    $s = preg_replace('/-+/', '-', $s);
+    if ($maxLen > 0 && strlen($s) > $maxLen) {
+      $s = rtrim(substr($s, 0, $maxLen), '-');
+    }
+    // don’t allow empty slugs
+    return $s !== '' ? $s : 'page';
+  }
+}
+
+/**
+ * Generate a slug unique for a given user.
+ * Appends -2, -3, ... if base is taken. Optional $excludeId when editing.
+ */
+if (!function_exists('unique_page_slug')) {
+  function unique_page_slug(PDO $pdo, int $userId, string $title, string $artist = '', ?int $excludeId = null): string {
+    $base = slugify(trim(($artist ? "$artist " : '') . $title), 72);
+    // fetch all existing slugs for this user starting with base
+    $sql = "SELECT LOWER(slug) AS s FROM pages WHERE user_id = :uid AND slug ILIKE :like";
+    $params = [':uid' => $userId, ':like' => $base.'%'];
+    if ($excludeId) { $sql .= " AND id <> :id"; $params[':id'] = $excludeId; }
+    $st = $pdo->prepare($sql);
+    $st->execute($params);
+    $taken = array_flip(array_column($st->fetchAll(PDO::FETCH_ASSOC), 's'));
+
+    // free? take base
+    if (!isset($taken[strtolower($base)])) return $base;
+
+    // try -2, -3, ... up to a sensible bound
+    for ($i = 2; $i <= 200; $i++) {
+      $try = $base.'-'.$i;
+      if (!isset($taken[strtolower($try)])) return $try;
+    }
+    // last resort: short random suffix
+    return $base.'-'.bin2hex(random_bytes(2));
+  }
+}

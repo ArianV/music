@@ -203,7 +203,7 @@ $head .= <<<CSS
 .cover{width:100%;height:100%;object-fit:cover;display:block}
 .title{font-weight:800;font-size:26px;margin:4px 0 0}
 .artist{color:#a1a1aa;font-size:13px;margin:6px 0 14px}
-.links{display:flex;flex-wrap:wrap;gap:10px}
+.links{display:flex;flex-wrap:wrap;gap:10px;justify-content: center;padding-top: 10px;}
 </style>
 CSS;
 
