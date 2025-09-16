@@ -36,3 +36,53 @@ body.layout {
 .site-footer {
   margin-top: auto; /* push footer down */
 }
+
+
+
+/* ---- Dashboard tweaks (mobile-first) ---- */
+.dashboard .dash-header{
+  display:flex; justify-content:space-between; align-items:center;
+  margin:0 0 14px;
+}
+.dashboard .dash-header h1{ margin:0; font-size:20px; }
+.dashboard .btn.btn-primary{
+  background:#34d399; color:#0b0b0c; font-weight:700;
+  padding:10px 14px; border-radius:10px; text-decoration:none;
+}
+
+/* table shell */
+.table-wrap{ background:#111318; border:1px solid #1f2430; border-radius:12px; padding:10px; }
+.tbl{ width:100%; border-collapse:collapse; }
+.tbl th, .tbl td{ padding:12px 10px; text-align:left; }
+.tbl thead th{ font-size:12px; color:#a1a1aa; border-bottom:1px solid #232938; }
+.tbl tbody tr + tr td{ border-top:1px solid #1f2430; }
+.tbl .actions{ white-space:nowrap; }
+.tbl .link{ color:#93c5fd; text-decoration:none; }
+.tbl .link.danger{ color:#fca5a5; }
+.tbl .sep{ color:#3b3f4a; margin:0 6px; }
+.tbl .empty td{ text-align:center; color:#a1a1aa; }
+
+/* --- Responsive: turn rows into cards under 640px --- */
+@media (max-width: 640px) {
+  .dashboard .dash-header { gap:10px; }
+  .dashboard .dash-header h1{ font-size:18px; }
+  .table-wrap { padding:8px; }
+
+  .tbl thead { display:none; }
+  .tbl, .tbl tbody, .tbl tr, .tbl td { display:block; width:100%; }
+  .tbl tr { border:1px solid #232938; border-radius:10px; padding:8px 10px; margin-bottom:10px; background:#0f1217; }
+  .tbl td {
+    display:grid; grid-template-columns: 40% 60%;
+    gap:8px; padding:8px 0; border:none !important;
+  }
+  .tbl td::before {
+    content: attr(data-label);
+    color:#a1a1aa; font-size:12px; align-self:center;
+  }
+  .tbl td.actions {
+    grid-template-columns: 1fr; display:flex; gap:10px; justify-content:flex-start;
+    padding-top:8px;
+  }
+  .tbl td.actions .sep{ display:none; }
+  .tbl code{ font-size:12px; word-break:break-all; }
+}

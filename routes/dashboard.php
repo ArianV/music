@@ -1,50 +1,90 @@
 <?php
-$u = current_user();
-require_auth(); // safety
+// routes/dashboard.php
+require_once __DIR__ . '/../config.php';
+require_auth();
 
-$stmt = db()->prepare('
-  SELECT id, title, slug, published, updated_at
+$u = current_user();
+$pdo = db();
+
+// derive a handle for public URLs (best-effort)
+$handle = null;
+foreach (['username','handle','slug','name'] as $col) {
+  if ($handle) break;
+  if (table_has_column($pdo, 'users', $col) && !empty($u[$col])) {
+    $handle = strtolower(trim($u[$col]));
+  }
+}
+if (!$handle) { $handle = 'me'; } // fallback (still shows /pages/... links)
+
+// fetch pages
+$st = $pdo->prepare("
+  SELECT id, title, slug, published,
+         COALESCE(updated_at, created_at) AS ts,
+         created_at, updated_at
   FROM pages
   WHERE user_id = :uid
-  ORDER BY updated_at DESC
-');
-$stmt->execute([':uid' => (int)$u['id']]);
-$pages = $stmt->fetchAll();
+  ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
+");
+$st->execute([':uid' => $u['id']]);
+$rows = $st->fetchAll();
 
-$title = 'Dashboard';
-ob_start(); ?>
-<div class="card">
-  <div style="display:flex;justify-content:space-between;align-items:center">
-    <h2>Your Pages</h2>
-    <a class="btn" href="<?= BASE_URL ?>pages/new">New Page</a>
-  </div>
-  <?php if (empty($pages)): ?>
-    <p class="small">No pages yet. Create your first one!</p>
-  <?php else: ?>
-    <table class="table">
-      <thead><tr><th>Title</th><th>Slug</th><th>Status</th><th>Updated</th><th>Public URL</th><th></th></tr></thead>
-      <tbody>
-        <?php foreach ($pages as $p): ?>
-          <tr>
-            <td><?= e($p['title']) ?></td>
-            <td><?= e($p['slug']) ?></td>
-            <td><?= !empty($p['published']) ? 'Published' : 'Draft' ?></td>
-            <td><?= e(time_ago($row['updated_at'] ?? $row['created_at'] ?? null) ?: '—') ?></td>
-            <td>
-              <?php if (!empty($p['published'])): ?>
-                <a href="<?= BASE_URL . '@' . e($u['username']) . '/' . e($p['slug']) ?>" target="_blank">View</a>
-              <?php else: ?>—<?php endif; ?>
-            </td>
-            <td>
-              <a href="<?= BASE_URL . 'pages/' . e($p['slug']) . '/edit' ?>">Edit</a> |
-              <a href="<?= BASE_URL . 'pages/' . e($p['slug']) . '/delete' ?>" style="color:#f87171">Delete</a>
-            </td>
-          </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
-  <?php endif; ?>
+ob_start();
+?>
+<div class="dash-header">
+  <h1>Your Pages</h1>
+  <a class="btn btn-primary" href="<?= e(BASE_URL) ?>pages/new">New Page</a>
+</div>
+
+<div class="table-wrap">
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Slug</th>
+        <th>Status</th>
+        <th>Updated</th>
+        <th>Public URL</th>
+        <th class="actions">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    <?php foreach ($rows as $r):
+      $slug   = $r['slug'] ?: (string)$r['id'];
+      $pubUrl = BASE_URL . '@' . rawurlencode($handle) . '/' . rawurlencode($slug);
+      // fallback to /pages/{slug} if you prefer:
+      // $pubUrl = BASE_URL . 'pages/' . rawurlencode($slug);
+    ?>
+      <tr>
+        <td data-label="Title">
+          <strong><?= e($r['title'] ?: 'Untitled') ?></strong>
+        </td>
+        <td data-label="Slug">
+          <code><?= e($slug) ?></code>
+        </td>
+        <td data-label="Status">
+          <?= $r['published'] ? 'Published' : 'Private' ?>
+        </td>
+        <td data-label="Updated">
+          <?= e(time_ago($r['ts'] ?? null) ?: '—') ?>
+        </td>
+        <td data-label="Public URL">
+          <a class="link" href="<?= e($pubUrl) ?>" target="_blank" rel="noopener">View</a>
+        </td>
+        <td data-label="Actions" class="actions">
+          <a class="link" href="<?= e(BASE_URL) . 'pages/' . e($slug) ?>/edit">Edit</a>
+          <span class="sep">|</span>
+          <a class="link danger" href="<?= e(BASE_URL) . 'pages/' . (int)$r['id'] ?>/delete">Delete</a>
+        </td>
+      </tr>
+    <?php endforeach; ?>
+    <?php if (!$rows): ?>
+      <tr class="empty"><td colspan="6">No pages yet. Create your first one!</td></tr>
+    <?php endif; ?>
+    </tbody>
+  </table>
 </div>
 <?php
 $content = ob_get_clean();
+$title = 'Dashboard · Music Landing';
+$bodyCls = 'dashboard';
 require __DIR__ . '/../views/layout.php';

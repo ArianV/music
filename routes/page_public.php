@@ -138,7 +138,7 @@ $meta_desc  = $artist ? "$artist — $title" : $title;
     .card .placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#9ca3af;font-size:12px}
     .title{font-weight:800;font-size:26px;margin:4px 0 0}
     .artist{color:#a1a1aa;font-size:13px;margin:6px 0 14px}
-    .links{display:flex;flex-wrap:wrap;gap:10px}
+    .links{display:flex;flex-wrap:wrap;gap:10px;justify-content: center;padding-top: 10px;}
     .btn-pill{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:999px;text-decoration:none;font-weight:700;font-size:14px;line-height:1;border:1px solid transparent;transition:filter .15s ease}
     .btn-pill .icon{width:16px;height:16px;fill:currentColor}
     .btn-spotify{background:#1DB954;color:#0b0b0c}
