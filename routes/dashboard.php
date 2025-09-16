@@ -29,7 +29,7 @@ ob_start(); ?>
             <td><?= e($p['title']) ?></td>
             <td><?= e($p['slug']) ?></td>
             <td><?= !empty($p['published']) ? 'Published' : 'Draft' ?></td>
-            <td><?= e(time_ago($p['updated_at'])) ?></td>
+            <td><?= e(time_ago($row['updated_at'] ?? $row['created_at'] ?? null) ?: '—') ?></td>
             <td>
               <?php if (!empty($p['published'])): ?>
                 <a href="<?= BASE_URL . '@' . e($u['username']) . '/' . e($p['slug']) ?>" target="_blank">View</a>

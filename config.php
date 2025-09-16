@@ -205,3 +205,36 @@ if (!function_exists('route_dispatch')) {
     exit;
   }
 }
+
+// ---------- Time helpers ----------
+if (!function_exists('time_ago')) {
+  function time_ago($value): string {
+    if ($value === null || $value === '') return '';
+    // Accepts DB timestamps ('2025-09-16 12:34:56') or unix ints
+    $ts = is_numeric($value) ? (int)$value : @strtotime((string)$value);
+    if (!$ts) return '';
+    $diff = time() - $ts;
+    $future = $diff < 0;
+    $diff = abs($diff);
+
+    if ($diff < 5) return $future ? 'in a few seconds' : 'just now';
+
+    $units = [
+      31536000 => 'year',
+      2592000  => 'month',
+      604800   => 'week',
+      86400    => 'day',
+      3600     => 'hour',
+      60       => 'minute',
+      1        => 'second',
+    ];
+    foreach ($units as $secs => $name) {
+      if ($diff >= $secs) {
+        $val = (int)floor($diff / $secs);
+        $label = $name . ($val === 1 ? '' : 's');
+        return $future ? "in $val $label" : "$val $label ago";
+      }
+    }
+    return $future ? 'in a moment' : 'just now';
+  }
+}
