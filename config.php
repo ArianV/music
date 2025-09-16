@@ -11,16 +11,23 @@ if (session_status() === PHP_SESSION_NONE) {
 if (!defined('BASE_URL')) {
   $envBase = getenv('BASE_URL'); // prefer env if provided
   if ($envBase) {
-    // normalize: ensure trailing slash
-    $envBase = rtrim($envBase, '/') . '/';
-    define('BASE_URL', $envBase);
+    // Normalize to scheme://host/ (strip any path) and ensure trailing slash
+    $u = parse_url($envBase);
+    $scheme = $u['scheme'] ?? ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
+    $host   = $u['host']   ?? ($_SERVER['HTTP_HOST'] ?? 'localhost');
+    define('BASE_URL', rtrim("$scheme://$host", '/') . '/');
   } else {
-    // infer from request
+    // Infer from request — root only
     $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    $base   = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? '/'), '/\\');
-    $base   = $base === '' ? '/' : $base . '/';
-    define('BASE_URL', $scheme . '://' . $host . $base);
+    define('BASE_URL', "$scheme://$host/");
+  }
+}
+
+// ---------- Asset URL helper ----------
+if (!function_exists('asset')) {
+  function asset(string $path): string {
+    return rtrim(BASE_URL, '/') . '/' . ltrim($path, '/');
   }
 }
 
@@ -32,7 +39,6 @@ if (!function_exists('e')) {
   }
 }
 
-// ---------- Database (PDO Postgres) ----------
 // ---------- Database (PDO Postgres) ----------
 if (!function_exists('db')) {
   function db(): PDO {
