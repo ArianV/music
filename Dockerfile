@@ -1,9 +1,12 @@
 FROM php:8.2-apache
+
 RUN a2enmod rewrite
 
+# Install system libs (pg, gd, **curl**) and PHP extensions
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      libpq-dev libpng-dev libjpeg-dev libwebp-dev ca-certificates \
-  && docker-php-ext-install pdo pdo_pgsql pgsql curl \ 
+      libpq-dev libpng-dev libjpeg-dev libwebp-dev \
+      libcurl4-openssl-dev pkg-config ca-certificates \
+  && docker-php-ext-install pdo pdo_pgsql pgsql curl \
   && docker-php-ext-configure gd --with-jpeg --with-webp \
   && docker-php-ext-install gd \
   && rm -rf /var/lib/apt/lists/*
