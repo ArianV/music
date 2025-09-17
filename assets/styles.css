@@ -138,6 +138,10 @@ input[type='text'],input[type='email'],input[type='password'],input[type='file']
   }
   .tbl td.actions .sep{ display:none; }
   .tbl code{ font-size:12px; word-break:break-all; }
+
+  /* Badge Button Mobile Friendly */
+  .status-published{ background:#10b981; border-color:#059669; color:#0b0b0c; font-weight:700; width: max-content; }
+  .status-draft{ background:#8b5cf6; border-color:#6d28d9; color:#f5f3ff; font-weight:700; width: max-content;}
 }
 
 /* =========================
