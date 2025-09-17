@@ -86,7 +86,6 @@ $pdo  = db();
 $page = null;
 
 if ($handle) {
-  // Scoped lookup by owner handle
   $owner = find_user_by_handle($pdo, $handle);
   if (!$owner) { http_response_code(404); exit('Not found'); }
 
@@ -102,8 +101,6 @@ if ($handle) {
                          WHERE p.slug = :slug AND p.user_id = :uid");
     $st->execute([':slug' => $key, ':uid' => (int)$owner['id']]);
     $page = $st->fetch();
-
-    // try normalized slug if available
     if (!$page && function_exists('slugify')) {
       $norm = slugify($key);
       if ($norm !== $key) {
@@ -116,7 +113,6 @@ if ($handle) {
     }
   }
 } else {
-  // No handle: /s/{slug} or /pages/{slug} or /pages/{id}
   if (ctype_digit((string)$key)) {
     $st = $pdo->prepare("SELECT p.*, u.id AS owner_id
                          FROM pages p LEFT JOIN users u ON u.id = p.user_id
@@ -124,7 +120,6 @@ if ($handle) {
     $st->execute([':id' => (int)$key]);
     $page = $st->fetch();
   } else {
-    // Deterministic pick if multiple users share the same slug:
     $st = $pdo->prepare("SELECT p.*, u.id AS owner_id
                          FROM pages p LEFT JOIN users u ON u.id = p.user_id
                          WHERE p.slug = :slug
@@ -132,7 +127,6 @@ if ($handle) {
                          LIMIT 1");
     $st->execute([':slug' => $key]);
     $page = $st->fetch();
-
     if (!$page && function_exists('slugify')) {
       $norm = slugify($key);
       if ($norm !== $key) {
@@ -157,20 +151,39 @@ $viewer_id = (int)(current_user()['id'] ?? 0);
 $is_owner  = $owner_id && $owner_id === $viewer_id;
 $is_public = (int)($page['published'] ?? 0) === 1;
 
-if (!$is_public && !$is_owner) { http_response_code(404); exit('Not found'); }
+/* ---------- unpublished: non-owner sees “private” screen ---------- */
+if (!$is_public && !$is_owner) {
+  http_response_code(403);
+  $title = 'Private page';
+  $head  = '<meta name="robots" content="noindex,noarchive">'."\n";
+  ob_start(); ?>
+  <article class="card" style="max-width:420px;margin:24px auto;text-align:center;padding:28px">
+    <div style="display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:14px;background:#0f1217;border:1px solid #2a3344;margin-bottom:12px">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <path d="M7 10V8a5 5 0 0 1 10 0v2m-9 0h8a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2Z"
+              stroke="#a1a1aa" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h1 class="title" style="margin:0 0 6px">This page is private</h1>
+    <p class="artist" style="margin:0 0 14px">The artist hasn’t published this page yet.</p>
+    <a class="btn btn-primary" href="<?= e(asset('login')) ?>">Login</a>
+  </article>
+  <?php
+  $content = ob_get_clean();
+  require __DIR__ . '/../views/layout.php';
+  exit;
+}
 
-/* ---------- render ---------- */
+/* ---------- render published (or owner preview) ---------- */
 
 $title   = trim((string)($page['title'] ?? 'Untitled'));
 $artist  = trim((string)($page['artist_name'] ?? $page['artist'] ?? ''));
 $cover   = page_cover($page);
 $links   = json_decode($page['links_json'] ?? '[]', true) ?: [];
 
-// Meta + OG
+// Meta + OG image (only public URLs should be shared; owner preview is fine)
 $meta_title = $title . ($artist ? " · $artist" : '');
 $meta_desc  = $artist ? "$artist — $title" : $title;
-
-// Prefer your generated OG image route
 $slug_or_id = $page['slug'] ?: (string)$page['id'];
 $og_image   = rtrim(BASE_URL,'/') . '/og/' . rawurlencode($slug_or_id);
 $canonical  = rtrim(BASE_URL,'/') . '/s/'  . rawurlencode($slug_or_id);
@@ -184,7 +197,15 @@ $head .= '<meta property="og:image" content="'.e($og_image).'">' . "\n";
 $head .= '<meta name="twitter:card" content="summary_large_image">' . "\n";
 $head .= '<meta name="twitter:image" content="'.e($og_image).'">' . "\n";
 
-// View
+// Draft banner for owner preview
+$banner = '';
+if (!$is_public && $is_owner) {
+  $editUrl = rtrim(BASE_URL,'/').'/pages/'.rawurlencode($slug_or_id).'/edit';
+  $banner = '<div style="max-width:340px;margin:16px auto 0;padding:8px 12px;border:1px solid #8b5cf6;border-radius:10px;background:#151325;color:#e5e7eb;font-size:13px">'
+          . 'Draft — only you can see this. <a class="link" href="'.e($editUrl).'" style="color:#a78bfa">Edit &amp; publish</a>'
+          . '</div>';
+}
+
 ob_start(); ?>
 <article class="card" style="max-width:340px;margin:24px auto;">
   <div class="card-media">
@@ -213,6 +234,7 @@ ob_start(); ?>
     </div>
   <?php endif; ?>
 </article>
+<?= $banner ?>
 <?php
 $content = ob_get_clean();
 
