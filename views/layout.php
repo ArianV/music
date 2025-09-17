@@ -24,11 +24,6 @@ if (!function_exists('current_user')) {
   function current_user(): ?array { return null; }
 }
 
-<?php if (current_user()): ?>
-  <a href="<?= e(rtrim(BASE_URL,'/').'/profile') ?>">Profile</a>
-<?php endif; ?>
-
-
 $pageTitle = isset($title) && $title ? $title : app_name();
 $bodyClass = isset($bodyCls) ? trim($bodyCls) : '';
 ?>
@@ -82,6 +77,9 @@ $bodyClass = isset($bodyCls) ? trim($bodyCls) : '';
     <?php if ($u = current_user()): ?>
       <a href="<?= e(asset('dashboard')) ?>">Dashboard</a>
       <a href="<?= e(asset('pages/new')) ?>">New Page</a>
+      <?php if (current_user()): ?>
+        <a href="<?= e(rtrim(BASE_URL,'/').'/profile') ?>">Profile</a>
+      <?php endif; ?>
       <a href="<?= e(asset('logout')) ?>">Logout</a>
     <?php else: ?>
       <a href="<?= e(asset('login')) ?>">Login</a>
