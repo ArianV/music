@@ -18,7 +18,7 @@ if (!function_exists('find_user_by_handle')) {
   }
 }
 
-// Service detection → classes + icon + label (icons are fixed 16×16)
+// Map “Label|URL” items to service styling (returns classes + 16×16 icon)
 if (!function_exists('service_meta')) {
   function service_meta(string $label, string $url): array {
     $lab = strtolower($label);
@@ -58,13 +58,13 @@ if (!function_exists('service_meta')) {
   }
 }
 
-/* ---------- resolve URL ---------- */
+/* ---------- resolve request path ---------- */
 
 $path   = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? '/';
 $handle = $GLOBALS['handle']   ?? null; // from router for /@handle/slug
 $key    = $GLOBALS['page_key'] ?? null; // from router for slug or id
 
-// Also accept /s/{slug} directly if router didn't set it
+// Accept /s/{slug} directly if router didn't populate globals
 if (!$handle && !$key && preg_match('#^/s/([^/]+)/?$#', $path, $m)) {
   $key = rawurldecode($m[1]);
 }
@@ -102,8 +102,10 @@ if ($handle) {
                          WHERE p.slug = :slug AND p.user_id = :uid");
     $st->execute([':slug' => $key, ':uid' => (int)$owner['id']]);
     $page = $st->fetch();
-    if (!$page) {
-      $norm = function_exists('slugify') ? slugify($key) : $key;
+
+    // try normalized slug if available
+    if (!$page && function_exists('slugify')) {
+      $norm = slugify($key);
       if ($norm !== $key) {
         $st = $pdo->prepare("SELECT p.*, u.id AS owner_id
                              FROM pages p JOIN users u ON u.id = p.user_id
@@ -131,8 +133,8 @@ if ($handle) {
     $st->execute([':slug' => $key]);
     $page = $st->fetch();
 
-    if (!$page) {
-      $norm = function_exists('slugify') ? slugify($key) : $key;
+    if (!$page && function_exists('slugify')) {
+      $norm = slugify($key);
       if ($norm !== $key) {
         $st = $pdo->prepare("SELECT p.*, u.id AS owner_id
                              FROM pages p LEFT JOIN users u ON u.id = p.user_id
@@ -164,9 +166,25 @@ $artist  = trim((string)($page['artist_name'] ?? $page['artist'] ?? ''));
 $cover   = page_cover($page);
 $links   = json_decode($page['links_json'] ?? '[]', true) ?: [];
 
+// Meta + OG
 $meta_title = $title . ($artist ? " · $artist" : '');
 $meta_desc  = $artist ? "$artist — $title" : $title;
 
+// Prefer your generated OG image route
+$slug_or_id = $page['slug'] ?: (string)$page['id'];
+$og_image   = rtrim(BASE_URL,'/') . '/og/' . rawurlencode($slug_or_id);
+$canonical  = rtrim(BASE_URL,'/') . '/s/'  . rawurlencode($slug_or_id);
+
+$head  = '<link rel="canonical" href="'.e($canonical).'">' . "\n";
+$head .= '<meta name="description" content="'.e($meta_desc).'">' . "\n";
+$head .= '<meta property="og:title" content="'.e($meta_title).'">' . "\n";
+$head .= '<meta property="og:description" content="'.e($meta_desc).'">' . "\n";
+$head .= '<meta property="og:type" content="website">' . "\n";
+$head .= '<meta property="og:image" content="'.e($og_image).'">' . "\n";
+$head .= '<meta name="twitter:card" content="summary_large_image">' . "\n";
+$head .= '<meta name="twitter:image" content="'.e($og_image).'">' . "\n";
+
+// View
 ob_start(); ?>
 <article class="card" style="max-width:340px;margin:24px auto;">
   <div class="card-media">
@@ -197,38 +215,6 @@ ob_start(); ?>
 </article>
 <?php
 $content = ob_get_clean();
-
-/* Head extras (OG/Twitter + minimal CSS so pills look right even without asset updates) */
-$head  = '<meta name="description" content="'.e($meta_desc).'">' . "\n";
-if ($cover) {
-  $head .= '<meta property="og:image" content="'.e($cover).'">' . "\n";
-  $head .= '<meta name="twitter:image" content="'.e($cover).'">' . "\n";
-}
-$head .= '<meta property="og:title" content="'.e($meta_title).'">' . "\n";
-$head .= '<meta property="og:description" content="'.e($meta_desc).'">' . "\n";
-$head .= '<meta property="og:type" content="website">' . "\n";
-$head .= <<<CSS
-<style>
-.btn-pill{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:999px;text-decoration:none;font-weight:700;font-size:14px;line-height:1;border:1px solid transparent;transition:filter .15s ease}
-.btn-pill .icon{width:16px;height:16px;fill:currentColor}
-.btn-pill:hover{filter:brightness(1.05)}
-.btn-default{background:#2563eb;color:#fff}
-.btn-svc-spotify{background:#1DB954;color:#0b0b0c}
-.btn-svc-apple{background:#fa2d48;color:#fff}
-.btn-svc-soundcloud{background:#ff5500;color:#fff}
-.btn-svc-amazon{background:#3b29ff;color:#fff}
-.btn-svc-youtube{background:#ff0000;color:#fff}
-.btn-svc-tidal{background:#0b0b0c;color:#e5e7eb;border:1px solid #2a3344}
-.btn-svc-deezer{background:#00a0f0;color:#fff}
-.btn-svc-bandcamp{background:#1e9d8b;color:#0b0b0c}
-.btn-svc-audiomack{background:#ffb300;color:#0b0b0c}
-.card-media{width:100%;aspect-ratio:1/1;border-radius:12px;overflow:hidden;background:#0f1217;margin-bottom:12px}
-.cover{width:100%;height:100%;object-fit:cover;display:block}
-.title{font-weight:800;font-size:26px;margin:4px 0 0}
-.artist{color:#a1a1aa;font-size:13px;margin:6px 0 14px}
-.links{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;padding-top:10px;}
-</style>
-CSS;
 
 $title = $meta_title;
 require __DIR__ . '/../views/layout.php';

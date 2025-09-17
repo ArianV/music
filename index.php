@@ -29,6 +29,9 @@ route('/pages/new',     'routes/pages_new.php');
 route_regex('#^/@([^/]+)/([^/]+)/?$#', 'routes/page_public.php', ['handle' => 1, 'page_key' => 2]);
 // Short public URL: /s/{slug}
 route_regex('#^/s/([^/]+)/?$#', 'routes/page_public.php', ['page_key' => 1]);
+// Social preview image (1200×630 PNG): /og/{slug-or-id}
+route_regex('#^/og/([^/]+)/?$#', 'routes/og.php', ['key' => 1]);
+
 
 // ----- regex routes -----
 route_regex('#^/pages/([^/]+)/edit$#',   'routes/pages_edit.php',   ['page_id' => 1]);
