@@ -1,181 +1,300 @@
 <?php
-// routes/profile_edit.php
+// routes/pages_edit.php
 require_once __DIR__ . '/../config.php';
 require_auth();
 csrf_check();
 
-$pdo  = db();
 $user = current_user();
+if (!$user) { header('Location: ' . BASE_URL . 'login'); exit; }
 
-/* helpers */
-function pe_handleify(string $s, int $maxLen=30): string {
-  $s = html_entity_decode($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-  if (function_exists('iconv')) { $t=@iconv('UTF-8','ASCII//TRANSLIT//IGNORE',$s); if($t!==false) $s=$t; }
-  $s = strtolower($s);
-  $s = preg_replace('/[^a-z0-9]+/i', '-', $s);
-  $s = preg_replace('/-+/', '-', $s);
-  $s = trim($s, '-');
-  if ($maxLen > 0 && strlen($s) > $maxLen) $s = rtrim(substr($s, 0, $maxLen), '-');
-  return $s ?: 'user';
-}
-function pe_socials_to_json(array $in): string {
-  $allowed = ['website','twitter','instagram','tiktok','youtube','soundcloud','bandcamp','spotify','apple'];
-  $out = [];
-  foreach ($allowed as $k) {
-    $v = trim((string)($in[$k] ?? ''));
-    if ($v !== '') $out[$k] = $v;
+/* ---------- local helpers (namespaced with ml_) ---------- */
+if (!function_exists('ml_slugify')) {
+  function ml_slugify(string $s, int $maxLen = 80): string {
+    $s = html_entity_decode($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $s = str_ireplace(['&','@','+'], [' and ',' at ',' plus '], $s);
+    if (function_exists('iconv')) {
+      $t = @iconv('UTF-8','ASCII//TRANSLIT//IGNORE',$s);
+      if ($t !== false) $s = $t;
+    }
+    $s = strtolower($s);
+    $s = preg_replace('/[^a-z0-9]+/i', '-', $s);
+    $s = preg_replace('/-+/', '-', $s);
+    $s = trim($s, '-');
+    if ($maxLen > 0 && strlen($s) > $maxLen) $s = rtrim(substr($s, 0, $maxLen), '-');
+    return $s !== '' ? $s : 'page';
   }
-  return json_encode($out, JSON_UNESCAPED_SLASHES);
+}
+if (!function_exists('ml_unique_page_slug')) {
+  function ml_unique_page_slug(PDO $pdo, int $userId, string $title, string $artist = '', ?int $excludeId = null): string {
+    $base = ml_slugify(trim(($artist ? "$artist " : '') . $title), 72);
+    $sql  = "SELECT LOWER(slug) AS s FROM pages WHERE user_id = :uid AND slug ILIKE :like";
+    $par  = [':uid'=>$userId, ':like'=>$base.'%'];
+    if ($excludeId) { $sql .= " AND id <> :id"; $par[':id'] = $excludeId; }
+    $st = $pdo->prepare($sql); $st->execute($par);
+    $taken = array_flip(array_column($st->fetchAll(PDO::FETCH_ASSOC), 's'));
+    if (!isset($taken[$base])) return $base;
+    for ($i=2; $i<=200; $i++) { $try = $base.'-'.$i; if (!isset($taken[$try])) return $try; }
+    return $base.'-'.bin2hex(random_bytes(2));
+  }
+}
+if (!function_exists('ml_detect_service_label')) {
+  function ml_detect_service_label(string $url): ?string {
+    $u = strtolower($url);
+    $h = parse_url($u, PHP_URL_HOST) ?: '';
+    $hit = function(array $needles) use ($u,$h){ foreach ($needles as $n) if (str_contains($u,$n)||str_contains($h,$n)) return true; return false; };
+    if ($hit(['open.spotify.com','spotify'])) return 'Spotify';
+    if ($hit(['music.apple.com','itunes.apple.com','apple'])) return 'Apple Music';
+    if ($hit(['soundcloud.com','soundcloud'])) return 'SoundCloud';
+    if ($hit(['youtube.com','youtu.be','music.youtube'])) return 'YouTube';
+    if ($hit(['music.amazon','amazon.com/music'])) return 'Amazon Music';
+    if ($hit(['tidal.com','tidal'])) return 'TIDAL';
+    if ($hit(['deezer.com','deezer'])) return 'Deezer';
+    if ($hit(['bandcamp.com','bandcamp'])) return 'Bandcamp';
+    if ($hit(['audiomack.com','audiomack'])) return 'Audiomack';
+    return null;
+  }
+}
+if (!function_exists('ml_links_array_to_json')) {
+  function ml_links_array_to_json(array $urls): string {
+    $out = [];
+    foreach ($urls as $url) {
+      $url = trim((string)$url);
+      if (!filter_var($url, FILTER_VALIDATE_URL)) continue;
+      $out[] = ['label'=>ml_detect_service_label($url), 'url'=>$url];
+    }
+    return json_encode($out, JSON_UNESCAPED_SLASHES);
+  }
+}
+if (!function_exists('ml_download_image_to_uploads')) {
+  function ml_download_image_to_uploads(string $url): ?string {
+    if (!defined('UPLOAD_DIR') || !defined('UPLOAD_URI')) return null;
+    $bin = function_exists('http_get') ? http_get($url, 6000) : @file_get_contents($url);
+    if (!$bin) return null;
+    $ext = '.jpg';
+    $pathPart = parse_url($url, PHP_URL_PATH) ?? '';
+    if (preg_match('/\.(png|webp|jpe?g)$/i', $pathPart, $m)) $ext='.'.strtolower($m[1]);
+    $name='cover_'.time().'_'.bin2hex(random_bytes(4)).$ext;
+    $full=rtrim(UPLOAD_DIR,'/').'/'.$name;
+    if (@file_put_contents($full, $bin) === false) return null;
+    return rtrim(UPLOAD_URI,'/').'/'.$name;
+  }
 }
 
-/* load me */
-$st = $pdo->prepare("SELECT * FROM users WHERE id=:id");
-$st->execute([':id'=>$user['id']]);
-$me = $st->fetch(PDO::FETCH_ASSOC) ?: [];
+/* ---------- which page? (id or slug from router) ---------- */
+$key = $GLOBALS['page_id'] ?? null;
+if (!$key && isset($_GET['id'])) $key = $_GET['id'];
+if (!$key) { http_response_code(404); exit('Page not found'); }
 
-/* save */
-$error = null; $saved=false;
+$pdo = db();
+if (ctype_digit((string)$key)) {
+  $st = $pdo->prepare("SELECT * FROM pages WHERE id=:id AND user_id=:uid");
+  $st->execute([':id'=>(int)$key, ':uid'=>$user['id']]);
+} else {
+  $st = $pdo->prepare("SELECT * FROM pages WHERE slug=:slug AND user_id=:uid");
+  $st->execute([':slug'=>$key, ':uid'=>$user['id']]);
+}
+$page = $st->fetch(PDO::FETCH_ASSOC);
+if (!$page) { http_response_code(404); exit('Page not found'); }
+
+$artist_val = $page['artist_name'] ?? $page['artist'] ?? '';
+$cover_val  = $page['cover_uri'] ?? $page['cover_url'] ?? $page['cover_image'] ?? null;
+
+/* ---------- POST: update ---------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  $display = trim($_POST['display_name'] ?? '');
-  $handle  = trim($_POST['handle'] ?? '');
-  $bio     = trim($_POST['bio'] ?? '');
-  $socials = (array)($_POST['socials'] ?? []);
-  $isPublic= !empty($_POST['profile_public']);
+  $title        = trim($_POST['title']  ?? '');
+  $artistInput  = trim($_POST['artist'] ?? '');
+  $urls         = $_POST['links_url']   ?? [];
+  $auto_img_url = trim($_POST['auto_image_url'] ?? '');
+  $published    = isset($_POST['published']) ? 1 : 0;
 
-  $handle = $handle === '' ? pe_handleify($display ?: ($me['handle'] ?? 'user')) : pe_handleify($handle);
+  if ($title === '') { http_response_code(422); exit('Title is required'); }
 
-  if (table_has_column($pdo,'users','handle')) {
-    $chk = $pdo->prepare("SELECT id FROM users WHERE lower(handle)=lower(:h) AND id<>:id LIMIT 1");
-    $chk->execute([':h'=>$handle, ':id'=>$user['id']]);
-    if ($chk->fetch()) $error = 'That handle is taken. Please choose another.';
+  $artist     = $artistInput !== '' ? $artistInput : 'Unknown Artist';
+  $links_json = ml_links_array_to_json((array)$urls);
+
+  // Cover: keep unless replaced
+  $cover_uri = $cover_val;
+  if (!empty($_FILES['cover']['name'] ?? '')) {
+    $safeName = time().'_'.preg_replace('/[^a-zA-Z0-9._-]/', '', $_FILES['cover']['name']);
+    $target   = rtrim(UPLOAD_DIR, '/').'/'.$safeName;
+    if (is_uploaded_file($_FILES['cover']['tmp_name'] ?? '') && @move_uploaded_file($_FILES['cover']['tmp_name'], $target)) {
+      $cover_uri = rtrim(UPLOAD_URI, '/').'/'.$safeName;
+    }
+  }
+  if (!$cover_uri && $auto_img_url) {
+    $saved = ml_download_image_to_uploads($auto_img_url);
+    if ($saved) $cover_uri = $saved;
   }
 
-  // avatar upload (optional)
-  $avatar_uri = $me['avatar_uri'] ?? null;
-  if (!$error && !empty($_FILES['avatar']['name'] ?? '')) {
-    $safe = time().'_'.preg_replace('/[^a-zA-Z0-9._-]/', '', $_FILES['avatar']['name']);
-    $tgt  = rtrim(UPLOAD_DIR,'/').'/'.$safe;
-    if (is_uploaded_file($_FILES['avatar']['tmp_name'] ?? '') && @move_uploaded_file($_FILES['avatar']['tmp_name'], $tgt)) {
-      $avatar_uri = rtrim(UPLOAD_URI,'/').'/'.$safe;
+  // Dynamic UPDATE
+  $sets = [];
+  $par  = [':id'=>$page['id'], ':uid'=>$user['id']];
+
+  $sets[] = 'title=:title';           $par[':title']      = $title;
+  $sets[] = 'links_json=:links_json'; $par[':links_json'] = $links_json;
+  if (table_has_column($pdo,'pages','published')) { $sets[]='published=:pub'; $par[':pub']=$published; }
+
+  if (table_has_column($pdo,'pages','artist_name')) { $sets[]='artist_name=:artist'; $par[':artist']=$artist; }
+  if (table_has_column($pdo,'pages','artist'))      { $sets[]='artist=:artist2';     $par[':artist2']=$artist; }
+
+  if ($cover_uri) {
+    foreach (['cover_uri','cover_url','cover_image'] as $c) {
+      if (table_has_column($pdo, 'pages', $c)) { $sets[]="$c=:cover"; $par[':cover']=$cover_uri; break; }
     }
   }
 
-  if (!$error) {
-    $sets=[]; $par=[':id'=>$user['id']];
-    if (table_has_column($pdo,'users','display_name'))  { $sets[]='display_name=:d';     $par[':d']=$display ?: null; }
-    if (table_has_column($pdo,'users','handle'))        { $sets[]='handle=:h';           $par[':h']=$handle; }
-    if (table_has_column($pdo,'users','bio'))           { $sets[]='bio=:b';              $par[':b']=$bio ?: null; }
-    if (table_has_column($pdo,'users','socials_json'))  { $sets[]='socials_json=:s';     $par[':s']=pe_socials_to_json($socials); }
-    if (table_has_column($pdo,'users','avatar_uri') && $avatar_uri) { $sets[]='avatar_uri=:a'; $par[':a']=$avatar_uri; }
-    if (table_has_column($pdo,'users','profile_public')){ $sets[]='profile_public=:pp';  $par[':pp']=$isPublic; } // boolean bind
-    if (table_has_column($pdo,'users','updated_at'))    { $sets[]='updated_at=NOW()'; }
+  if (table_has_column($pdo,'pages','slug')) {
+    $par[':slug'] = ml_unique_page_slug($pdo, (int)$user['id'], $title, $artist, (int)$page['id']);
+    $sets[] = 'slug=:slug';
+  }
+  if (table_has_column($pdo,'pages','updated_at')) { $sets[]='updated_at=NOW()'; }
 
-    if ($sets) {
-      $sql="UPDATE users SET ".implode(', ',$sets)." WHERE id=:id";
-      $pdo->prepare($sql)->execute($par);
-      $saved=true;
-      $st = $pdo->prepare("SELECT * FROM users WHERE id=:id"); $st->execute([':id'=>$user['id']]); $me=$st->fetch(PDO::FETCH_ASSOC) ?: $me;
-    }
+  $sql = "UPDATE pages SET ".implode(', ', $sets)." WHERE id=:id AND user_id=:uid";
+  $pdo->prepare($sql)->execute($par);
+
+  header('Location: '.BASE_URL.'dashboard'); exit;
+}
+
+/* ---------- prefill links for UI ---------- */
+$prefill_urls = [];
+if (!empty($page['links_json'])) {
+  $arr = json_decode($page['links_json'], true) ?: [];
+  foreach ($arr as $it) {
+    $u = trim((string)($it['url'] ?? ''));
+    if ($u) $prefill_urls[] = $u;
   }
 }
 
-/* view data */
-$display = $me['display_name'] ?? '';
-$handle  = $me['handle'] ?? '';
-$bio     = $me['bio'] ?? '';
-$avatar  = $me['avatar_uri'] ?? null;
-$public  = (bool)($me['profile_public'] ?? false);
-$socials = json_decode($me['socials_json'] ?? '[]', true) ?: [];
-$publicUrl = rtrim(BASE_URL,'/').'/u/'.rawurlencode($handle ?: 'your-handle');
+/* ---------- view ---------- */
+$title = 'Edit page';
 
-$title='Edit profile';
-$head=<<<CSS
+// styles + JS for repeater + back pill
+$head = <<<HTML
 <style>
 .titlebar{display:flex;align-items:center;gap:12px;margin:0 0 16px}
-.backlink{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid #2a3344;border-radius:10px;color:#a1a1aa;text-decoration:none;background:#0f1217}
+.backlink{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:8px 12px;border:1px solid #2a3344;border-radius:10px;
+  color:#a1a1aa;text-decoration:none;background:#0f1217;
+}
 .backlink:hover{color:#e5e7eb;border-color:#3b4254}
+.backlink .icon{width:16px;height:16px;display:block}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-@media (max-width:760px){.form-grid{grid-template-columns:1fr}}
-.row{margin:12px 0}
+@media (max-width:700px){.form-grid{grid-template-columns:1fr}}
+img.cover{max-width:180px;border-radius:10px;border:1px solid #253041;display:block;margin-top:8px}
+
+/* links repeater */
+.links-wrap{margin-top:6px}
+.link-row{display:flex;align-items:center;gap:10px;margin:8px 0}
+.link-row .svc{min-width:108px;padding:6px 10px;border:1px solid #2a3344;border-radius:999px;background:#0f1217;color:#a1a1aa;text-align:center;font-size:12px}
+.link-row input[type="url"]{flex:1;padding:10px;border:1px solid #222;border-radius:10px;background:#0f0f16;color:#e5e7eb}
+.link-row .remove{background:#232938;border:1px solid #2a3344;color:#a1a1aa;padding:8px 10px;border-radius:10px}
+.add-link{margin-top:8px;background:#1f2937;border:1px solid #2a3344;color:#e5e7eb;padding:10px 12px;border-radius:10px}
 .small{font-size:.9rem;color:#a1a1aa}
-.avatar{width:96px;height:96px;border-radius:50%;object-fit:cover;border:1px solid #263142;background:#0f1217}
-.urlbox{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.urlbox code{background:#0f1217;border:1px solid #263142;padding:8px 10px;border-radius:8px}
-.notice{border:1px solid #2a3344;background:#0f1217;padding:10px 12px;border-radius:10px;margin-bottom:12px}
-.notice.ok{border-color:#14532d;background:#0c1a12;color:#86efac}
-.notice.err{border-color:#7f1d1d;background:#1b1212;color:#fca5a5}
 </style>
-CSS;
+<script>
+(function(){
+  const svcDetect = (url) => {
+    const u = (url||'').toLowerCase();
+    if (u.includes('spotify')) return 'Spotify';
+    if (u.includes('music.apple') || u.includes('itunes.apple')) return 'Apple Music';
+    if (u.includes('soundcloud')) return 'SoundCloud';
+    if (u.includes('youtu.be') || u.includes('youtube')) return 'YouTube';
+    if (u.includes('music.amazon') || u.includes('amazon.com/music')) return 'Amazon Music';
+    if (u.includes('tidal')) return 'TIDAL';
+    if (u.includes('deezer')) return 'Deezer';
+    if (u.includes('bandcamp')) return 'Bandcamp';
+    if (u.includes('audiomack')) return 'Audiomack';
+    return 'Link';
+  };
+
+  function makeRow(initialUrl, placeholder){
+    const row = document.createElement('div');
+    row.className = 'link-row';
+    const label = svcDetect(initialUrl||'');
+    row.innerHTML = `
+      <div class="svc">\${label}</div>
+      <input type="url" name="links_url[]" value="\${initialUrl?initialUrl.replace(/"/g,'&quot;'):''}" placeholder="\${placeholder||'Paste link'}" inputmode="url" spellcheck="false">
+      <button type="button" class="remove" aria-label="Remove">Remove</button>
+    `;
+    const input = row.querySelector('input');
+    const svc   = row.querySelector('.svc');
+    input.addEventListener('input', () => { svc.textContent = svcDetect(input.value); });
+    row.querySelector('.remove').addEventListener('click', () => row.remove());
+    return row;
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    const list = document.getElementById('links-list');
+    const add  = document.getElementById('add-link');
+    const pre  = JSON.parse(document.getElementById('prefill-links').textContent || '[]');
+    if (pre.length) pre.forEach(u => list.appendChild(makeRow(u, 'Paste link')));
+    if (!pre.length) list.appendChild(makeRow('', 'Paste Spotify link'));
+    add.addEventListener('click', () => {
+      list.appendChild(makeRow('', 'Paste link (Spotify, Apple Music, YouTube, etc.)'));
+    });
+  });
+})();
+</script>
+HTML;
+
+$slug_or_id = $page['slug'] ?: (string)$page['id'];
+$publicUrl  = rtrim(BASE_URL,'/').'/s/'.rawurlencode($slug_or_id);
 
 ob_start(); ?>
 <div class="titlebar">
-  <a href="<?= e(rtrim(BASE_URL,'/').'/dashboard') ?>" class="backlink">← Back</a>
-  <h1 style="margin:0">Edit profile</h1>
+  <a href="#" class="backlink" aria-label="Go back"
+     onclick="if(history.length>1){history.back();}else{location.href='<?= e(asset('dashboard')) ?>';}return false;">
+    <svg class="icon" viewBox="0 0 24 24"><path fill="currentColor" d="M15.5 19.5 8 12l7.5-7.5 1.5 1.5L11 12l6 6-1.5 1.5z"/></svg>
+    <span>Back</span>
+  </a>
+  <h1 style="margin:0">Edit page</h1>
+  <div style="flex:1"></div>
+  <button type="button" class="btn" onclick="navigator.clipboard?.writeText('<?= e($publicUrl) ?>')?.then(()=>this.textContent='Copied!')">Copy public link</button>
 </div>
-
-<?php if ($saved): ?><div class="notice ok">Profile saved.</div><?php endif; ?>
-<?php if (!empty($error)): ?><div class="notice err"><?= e($error) ?></div><?php endif; ?>
 
 <div class="card">
   <form method="post" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
 
-    <div class="row" style="display:flex;gap:16px;align-items:center">
-      <img class="avatar" src="<?= e($avatar ?: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2212%22 fill=%22%230B0B0C%22/></svg>') ?>" alt="">
-      <div>
-        <label class="small">Avatar</label>
-        <input type="file" name="avatar" accept="image/*">
-      </div>
-    </div>
-
     <div class="form-grid">
       <div>
-        <label class="small">Display name</label>
-        <input type="text" name="display_name" value="<?= e($display) ?>" placeholder="Lil Foaf">
+        <label class="small">Title</label>
+        <input type="text" name="title" value="<?= e($page['title'] ?? '') ?>" required>
       </div>
       <div>
-        <label class="small">Handle</label>
-        <div style="display:flex;gap:8px;align-items:center">
-          <div style="padding:10px 12px;background:#0f1217;border:1px solid #263142;border-radius:8px;color:#9ca3af">@</div>
-          <input type="text" name="handle" value="<?= e($handle) ?>" placeholder="lil-foaf" pattern="[a-z0-9-]{2,30}" title="lowercase letters, numbers, dashes">
-        </div>
-        <div class="small" style="margin-top:6px">Your public URL: <code><?= e($publicUrl) ?></code></div>
+        <label class="small">Artist</label>
+        <input type="text" name="artist" value="<?= e($artist_val) ?>" placeholder="Artist name (optional)">
       </div>
     </div>
 
-    <div class="row">
-      <label class="small">Bio</label>
-      <textarea name="bio" rows="4" placeholder="Short intro..."><?= e($bio) ?></textarea>
+    <div class="links-wrap">
+      <label class="small" style="display:block;margin-bottom:6px">Links</label>
+      <div id="links-list"></div>
+      <button type="button" id="add-link" class="add-link">+ Add link</button>
+      <div class="small" style="margin-top:6px">Just paste URLs — we’ll detect the service automatically.</div>
     </div>
 
-    <div class="row">
-      <label class="small">Links</label>
-      <div class="form-grid">
-        <div><input type="url" name="socials[website]"    value="<?= e($socials['website']    ?? '') ?>" placeholder="Website URL"></div>
-        <div><input type="url" name="socials[twitter]"    value="<?= e($socials['twitter']    ?? '') ?>" placeholder="Twitter / X URL"></div>
-        <div><input type="url" name="socials[instagram]"  value="<?= e($socials['instagram']  ?? '') ?>" placeholder="Instagram URL"></div>
-        <div><input type="url" name="socials[tiktok]"     value="<?= e($socials['tiktok']     ?? '') ?>" placeholder="TikTok URL"></div>
-        <div><input type="url" name="socials[youtube]"    value="<?= e($socials['youtube']    ?? '') ?>" placeholder="YouTube URL"></div>
-        <div><input type="url" name="socials[soundcloud]" value="<?= e($socials['soundcloud'] ?? '') ?>" placeholder="SoundCloud URL"></div>
-        <div><input type="url" name="socials[bandcamp]"   value="<?= e($socials['bandcamp']   ?? '') ?>" placeholder="Bandcamp URL"></div>
-        <div><input type="url" name="socials[spotify]"    value="<?= e($socials['spotify']    ?? '') ?>" placeholder="Spotify Artist URL"></div>
-        <div><input type="url" name="socials[apple]"      value="<?= e($socials['apple']      ?? '') ?>" placeholder="Apple Music Artist URL"></div>
-      </div>
+    <script type="application/json" id="prefill-links"><?= json_encode($prefill_urls, JSON_UNESCAPED_SLASHES) ?></script>
+
+    <input type="hidden" name="auto_image_url" id="auto_image_url">
+
+    <div class="form-row" style="padding-left:0;padding-right:0">
+      <label class="small" style="display:block;margin-bottom:6px">Cover image (optional)</label>
+      <?php if ($cover_val): ?>
+        <img class="cover" src="<?= e($cover_val) ?>" alt="cover">
+      <?php endif; ?>
+      <input type="file" name="cover" accept="image/*">
     </div>
 
-    <div class="row" style="display:flex;align-items:center;gap:10px">
+    <div class="form-row" style="align-items:center;padding-left:0">
       <label class="small" style="display:inline-flex;align-items:center;gap:8px">
-        <input type="checkbox" name="profile_public" value="1" <?= $public ? 'checked' : '' ?>>
-        Make my profile public (show at /u/<?= e($handle ?: 'your-handle') ?>)
+        <input type="checkbox" name="published" value="1" <?= !empty($page['published']) ? 'checked' : '' ?>> Published
       </label>
     </div>
 
-    <div class="row urlbox">
-      <button type="button" class="btn" onclick="navigator.clipboard?.writeText('<?= e($publicUrl) ?>')?.then(()=>this.textContent='Copied!')">Copy profile URL</button>
-    </div>
-
-    <div class="row">
-      <button type="submit" class="btn btn-primary">Save profile</button>
+    <div class="form-row" style="padding-left:0">
+      <button type="submit" class="btn btn-primary">Save changes</button>
     </div>
   </form>
 </div>
