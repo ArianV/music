@@ -26,6 +26,7 @@ route('/logout', 'routes/logout.php');
 route('/pages/new', 'routes/pages_new.php');
 route('/profile', 'routes/profile_edit.php'); 
 route('/diag/upload', 'routes/diag_upload.php');
+route('/diag/persist', 'routes/diag_persist.php');
 
 // ---- pages (slugs or numeric ids) — SPECIFIC FIRST
 route_regex('#^/pages/([^/]+)/edit/?$#', 'routes/pages_edit.php',   ['page_id' => 1]);
