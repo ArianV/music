@@ -53,15 +53,21 @@ ob_start(); ?>
     <?php if (!$rows): ?>
       <tr class="empty"><td colspan="5">No pages yet — create your first one!</td></tr>
     <?php else: foreach ($rows as $r):
-      $slug   = $r['slug'] ?: (string)$r['id'];
-      $pubUrl = rtrim(BASE_URL,'/').'/s/'.rawurlencode($slug);
-      $editUrl= rtrim(BASE_URL,'/').'/pages/'.rawurlencode($slug).'/edit';
-      $delUrl = rtrim(BASE_URL,'/').'/pages/'.rawurlencode($slug).'/delete';
+      $slug    = $r['slug'] ?: (string)$r['id'];
+      $isPub   = !empty($r['published']);
+      $pubUrl  = rtrim(BASE_URL,'/').'/s/'.rawurlencode($slug);
+      $editUrl = rtrim(BASE_URL,'/').'/pages/'.rawurlencode($slug).'/edit';
+      $delUrl  = rtrim(BASE_URL,'/').'/pages/'.rawurlencode($slug).'/delete';
+      $statusHtml = $isPub
+        ? '<span class="badge status-published">Published</span>'
+        : '<span class="badge status-draft">Draft</span>';
     ?>
       <tr>
-        <td data-label="Title"><?= e($r['title'] ?? 'Untitled') ?></td>
-        <td data-label="Slug"><code><?= e($slug) ?></code></td>
-        <td data-label="Status"><?= !empty($r['published']) ? 'Published' : 'Draft' ?></td>
+        <td data-label="Title">
+          <?= e($r['title'] ?? 'Untitled') ?>
+        </td>
+        <td data-label="Slug (URL)"><code><?= e($slug) ?></code></td>
+        <td data-label="Status"><?= $statusHtml ?></td>
         <td data-label="Updated"><?= e(time_ago($r['updated_at'] ?? $r['created_at'])) ?></td>
         <td class="actions" data-label="Actions">
           <a class="link" href="<?= e($pubUrl) ?>" target="_blank" rel="noopener">View</a>
@@ -70,7 +76,11 @@ ob_start(); ?>
           <span class="sep">•</span>
           <a class="link danger" href="<?= e($delUrl) ?>" onclick="return confirm('Delete this page?')">Delete</a>
           <span class="sep">•</span>
-          <button type="button" class="btn copy-btn" data-url="<?= e($pubUrl) ?>">Copy link</button>
+          <button type="button" class="btn copy-btn"
+                  data-url="<?= e($pubUrl) ?>"
+                  <?= $isPub ? '' : 'disabled title="Publish to share"' ?>>
+            <?= $isPub ? 'Copy link' : 'Copy link' ?>
+          </button>
         </td>
       </tr>
     <?php endforeach; endif; ?>
@@ -81,7 +91,7 @@ ob_start(); ?>
 <script>
 document.addEventListener('click', function(e){
   const b = e.target.closest('.copy-btn');
-  if (!b) return;
+  if (!b || b.disabled) return;
   const url = b.dataset.url || '';
   if (!url) return;
   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -90,15 +100,10 @@ document.addEventListener('click', function(e){
       b.textContent = 'Copied!';
       b.disabled = true;
       setTimeout(() => { b.textContent = old; b.disabled = false; }, 1200);
-    }).catch(() => {
-      window.prompt('Copy link', url);
-    });
-  } else {
-    window.prompt('Copy link', url);
-  }
+    }).catch(() => { window.prompt('Copy link', url); });
+  } else { window.prompt('Copy link', url); }
 });
 </script>
 <?php
 $content = ob_get_clean();
-
 require __DIR__ . '/../views/layout.php';

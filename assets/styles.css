@@ -81,7 +81,14 @@ input[type='text'],input[type='email'],input[type='password'],input[type='file']
 /* Small UI bits */
 .small{font-size:.9rem;color:var(--muted)}
 .meta{display:flex;gap:10px;align-items:center;margin-top:8px;justify-content:center}
-.badge{background:#0f0f16;border:1px solid #222;padding:4px 8px;border-radius:999px}
+/* Status badges */
+.badge{background:#0f0f16;border:1px solid #222;padding:4px 8px;border-radius:999px;font-size:12px}
+.status-published{ background:#10b981; border-color:#059669; color:#0b0b0c; font-weight:700; }
+.status-draft{ background:#8b5cf6; border-color:#6d28d9; color:#f5f3ff; font-weight:700; }
+
+/* Disabled copy button hint */
+.copy-btn[disabled]{ opacity:.6; cursor:not-allowed; }
+
 
 /* =========================
    Dashboard (mobile-first)
