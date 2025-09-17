@@ -142,7 +142,7 @@ input[type='text'],input[type='email'],input[type='password'],input[type='file']
 .artist{color:#a1a1aa;font-size:13px;margin:6px 0 14px}
 
 /* Links section (pills) */
-.links{display:flex;flex-wrap:wrap;gap:10px}
+.links{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;padding-top: 10px;}
 
 /* Service pills (shared) */
 .btn-pill{
