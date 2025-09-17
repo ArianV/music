@@ -84,7 +84,7 @@ $title = $display . ' · PlugBio';
 $head  = '';
 
 function social_icon(string $k): string {
-  $map = ['website'=>'🌐','twitter'=>'𝕏','instagram'=>'◎','tiktok'=>'🎵','youtube'=>'▶','soundcloud'=>'☁','bandcamp'=>'⏵','spotify'=>'🟢','apple'=>''];
+  $map = ['website'=>'🌐','twitter'=>'𝕏','instagram'=>'◎','tiktok'=>'🎵','youtube'=>'▶','soundcloud'=>'☁','bandcamp'=>'⏵','spotify'=>'🟢','apple'=>'🍎'];
   return $map[$k] ?? '↗';
 }
 
