@@ -50,7 +50,7 @@ ob_start();
     <tbody>
     <?php foreach ($rows as $r):
       $slug   = $r['slug'] ?: (string)$r['id'];
-      $pubUrl = BASE_URL . '@' . rawurlencode($handle) . '/' . rawurlencode($slug);
+      $pubUrl = rtrim(BASE_URL,'/').'/s/'.rawurlencode($slug);
       // fallback to /pages/{slug} if you prefer:
       // $pubUrl = BASE_URL . 'pages/' . rawurlencode($slug);
     ?>
