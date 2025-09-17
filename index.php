@@ -17,28 +17,25 @@ if (preg_match('#^/(assets|uploads)/#', $uri)) {
 
 require_once __DIR__ . '/config.php';
 
-// ----- exact routes -----
-route('/',              'routes/dashboard.php');   // or routes/home.php if you prefer
-route('/login',         'routes/login.php');
-route('/register',      'routes/register.php');    // <— add this
-route('/logout',        'routes/logout.php');
-route('/dashboard',     'routes/dashboard.php');
-route('/profile', 'routes/profile_edit.php');
-route('/pages/new',     'routes/pages_new.php');
+// ---- exact routes
+route('/', 'routes/dashboard.php');
+route('/dashboard', 'routes/dashboard.php');
+route('/login', 'routes/login.php');
+route('/register', 'routes/register.php');
+route('/logout', 'routes/logout.php');
+route('/pages/new', 'routes/pages_new.php');
+route('/profile', 'routes/profile_edit.php'); 
 
-// --- NEW: public pages like /@foaf/lil-uzi-vert-20-min ---
-route_regex('#^/@([^/]+)/([^/]+)/?$#', 'routes/page_public.php', ['handle' => 1, 'page_key' => 2]);
-// Short public URL: /s/{slug}
+// ---- pages (slugs or numeric ids) — SPECIFIC FIRST
+route_regex('#^/pages/([^/]+)/edit/?$#', 'routes/pages_edit.php',   ['page_id' => 1]);
+route_regex('#^/pages/([^/]+)/delete/?$#', 'routes/pages_delete.php', ['page_id' => 1]);
+
+// Public page URLs
 route_regex('#^/s/([^/]+)/?$#', 'routes/page_public.php', ['page_key' => 1]);
-// Social preview image (1200×630 PNG): /og/{slug-or-id}
-route_regex('#^/og/([^/]+)/?$#', 'routes/og.php', ['key' => 1]);
+// (optional) keep @handle/slug if you still use it:
+route_regex('#^/@([^/]+)/([^/]+)/?$#', 'routes/page_public.php', ['handle' => 1, 'page_key' => 2]);
 
-
-// ----- regex routes -----
-route_regex('#^/pages/([^/]+)/edit$#',   'routes/pages_edit.php',   ['page_id' => 1]);
-route_regex('#^/pages/([^/]+)/delete$#', 'routes/pages_delete.php', ['page_id' => 1]);
-route_regex('#^/pages/([^/]+)/?$#',      'routes/page_public.php',  ['page_key' => 1]);
+// Public profile
 route_regex('#^/u/([^/]+)/?$#', 'routes/profile_view.php', ['handle' => 1]);
 
-// dispatch
 route();
