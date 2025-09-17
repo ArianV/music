@@ -155,14 +155,13 @@ ob_start(); ?>
           <div class="pill">@</div>
           <input type="text" name="handle" value="<?= e($handle) ?>" placeholder="lil-foaf" pattern="[a-z0-9-]{2,30}" title="lowercase letters, numbers, dashes">
         </div>
-        <div class="small" style="margin-top:6px">Public URL: <code><?= e($publicUrl) ?></code></div>
       </div>
       <div>
         <div class="small">Privacy</div>
         <div class="select-wrap">
           <select class="select" name="profile_visibility">
-            <option value="private" <?= !$public ? 'selected' : '' ?>>Private (default)</option>
-            <option value="public"  <?=  $public ? 'selected' : '' ?>>Public – visible at /u/<?= e($handle ?: 'your-handle') ?></option>
+            <option value="private" <?= !$public ? 'selected' : '' ?>>Private</option>
+            <option value="public"  <?=  $public ? 'selected' : '' ?>>Public</option>
           </select>
         </div>
         <div class="small" style="margin-top:6px">
