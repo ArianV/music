@@ -78,7 +78,7 @@ ob_start(); ?>
           <span class="sep">•</span>
           <button type="button" class="btn copy-btn"
                   data-url="<?= e($pubUrl) ?>"
-                  <?= $isPub ? '' : 'title="Publish to share"' ?>>
+                  <?= $isPub ? '' : 'disabled title="Publish to share"' ?>>
             <?= $isPub ? 'Copy link' : 'Copy link' ?>
           </button>
         </td>
