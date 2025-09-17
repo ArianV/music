@@ -119,7 +119,7 @@ ob_start(); ?>
       <input type="password" name="password2" required minlength="6" placeholder="••••••••">
     </div>
 
-    <div class="row">
+    <div class="row" style="padding-top: 20px;">
       <button class="btn btn-primary" type="submit">Create account</button>
     </div>
 
