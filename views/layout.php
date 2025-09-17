@@ -24,6 +24,11 @@ if (!function_exists('current_user')) {
   function current_user(): ?array { return null; }
 }
 
+<?php if (current_user()): ?>
+  <a href="<?= e(rtrim(BASE_URL,'/').'/profile') ?>">Profile</a>
+<?php endif; ?>
+
+
 $pageTitle = isset($title) && $title ? $title : app_name();
 $bodyClass = isset($bodyCls) ? trim($bodyCls) : '';
 ?>
@@ -40,7 +45,7 @@ $bodyClass = isset($bodyCls) ? trim($bodyCls) : '';
   <link rel="apple-touch-icon" href="<?= e(asset('assets/favicon.svg')) ?>">
 
   <!-- Main stylesheet -->
-  <link rel="stylesheet" href="<?= e(asset('assets/styles.css?v10')) ?>">
+  <link rel="stylesheet" href="<?= e(asset('assets/styles.css')) ?>">
 
   <?php
   // Allow routes to push extra meta/css into <head>

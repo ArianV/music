@@ -23,6 +23,7 @@ route('/login',         'routes/login.php');
 route('/register',      'routes/register.php');    // <— add this
 route('/logout',        'routes/logout.php');
 route('/dashboard',     'routes/dashboard.php');
+route('/profile', 'routes/profile_edit.php');
 route('/pages/new',     'routes/pages_new.php');
 
 // --- NEW: public pages like /@foaf/lil-uzi-vert-20-min ---
@@ -37,6 +38,7 @@ route_regex('#^/og/([^/]+)/?$#', 'routes/og.php', ['key' => 1]);
 route_regex('#^/pages/([^/]+)/edit$#',   'routes/pages_edit.php',   ['page_id' => 1]);
 route_regex('#^/pages/([^/]+)/delete$#', 'routes/pages_delete.php', ['page_id' => 1]);
 route_regex('#^/pages/([^/]+)/?$#',      'routes/page_public.php',  ['page_key' => 1]);
+route_regex('#^/u/([^/]+)/?$#', 'routes/profile_view.php', ['handle' => 1]);
 
 // dispatch
 route();
