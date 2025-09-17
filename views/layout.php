@@ -40,7 +40,7 @@ $bodyClass = isset($bodyCls) ? trim($bodyCls) : '';
   <link rel="apple-touch-icon" href="<?= e(asset('assets/favicon.svg')) ?>">
 
   <!-- Main stylesheet -->
-  <link rel="stylesheet" href="<?= e(asset('assets/styles.css')) ?>">
+  <link rel="stylesheet" href="<?= e(asset('assets/styles.css?v2')) ?>">
 
   <?php
   // Allow routes to push extra meta/css into <head>
