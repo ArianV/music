@@ -120,7 +120,15 @@ if (!function_exists('require_auth')) {
 // ---------- Uploads ----------
 if (!defined('UPLOAD_DIR')) define('UPLOAD_DIR', __DIR__ . '/uploads');
 if (!defined('UPLOAD_URI')) define('UPLOAD_URI', rtrim(BASE_URL, '/') . '/uploads');
-if (!is_dir(UPLOAD_DIR)) { @mkdir(UPLOAD_DIR, 0775, true); }
+
+// try to self-heal the directory so move_uploaded_file works
+if (!is_dir(UPLOAD_DIR)) {
+  @mkdir(UPLOAD_DIR, 0775, true);
+}
+if (!is_writable(UPLOAD_DIR)) {
+  // attempt to relax perms; chown may not be allowed on your host, so we do chmod
+  @chmod(UPLOAD_DIR, 0777); // last resort: wide-open so it always works
+}
 
 // ---------- Helpers ----------
 if (!function_exists('page_cover')) {
