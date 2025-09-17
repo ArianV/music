@@ -7,7 +7,7 @@ csrf_check();
 $user = current_user();
 if (!$user) { header('Location: ' . BASE_URL . 'login'); exit; }
 
-/* ---------- local helpers (not guarded on purpose) ---------- */
+/* ----------------- helpers ----------------- */
 function ml_slugify(string $s, int $maxLen = 80): string {
   $s = html_entity_decode($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
   $s = str_ireplace(['&','@','+'], [' and ',' at ',' plus '], $s);
@@ -24,20 +24,37 @@ function ml_unique_page_slug(PDO $pdo, int $userId, string $title, string $artis
   $sql  = "SELECT LOWER(slug) AS s FROM pages WHERE user_id = :uid AND slug ILIKE :like";
   $par  = [':uid'=>$userId, ':like'=>$base.'%'];
   if ($excludeId) { $sql .= " AND id <> :id"; $par[':id'] = $excludeId; }
-  $st = $pdo->prepare($sql); $st->execute($par);
+  $st = db()->prepare($sql); $st->execute($par);
   $taken = array_flip(array_column($st->fetchAll(PDO::FETCH_ASSOC), 's'));
   if (!isset($taken[$base])) return $base;
   for ($i=2; $i<=200; $i++) { $try = $base.'-'.$i; if (!isset($taken[$try])) return $try; }
   return $base.'-'.bin2hex(random_bytes(2));
 }
-function parse_links_to_json(?string $raw): string {
-  $lines = array_values(array_filter(array_map('trim', preg_split('/\r?\n/', (string)$raw))));
+function detect_service_label(string $url): ?string {
+  $u = strtolower($url);
+  $h = parse_url($u, PHP_URL_HOST) ?: '';
+  $match = function(array $needles) use ($u,$h){
+    foreach ($needles as $n) if (str_contains($u,$n) || str_contains($h,$n)) return true;
+    return false;
+  };
+  if ($match(['open.spotify.com','spotify'])) return 'Spotify';
+  if ($match(['music.apple.com','itunes.apple.com','apple'])) return 'Apple Music';
+  if ($match(['soundcloud.com','soundcloud'])) return 'SoundCloud';
+  if ($match(['youtube.com','youtu.be','music.youtube'])) return 'YouTube';
+  if ($match(['music.amazon','amazon.com/music'])) return 'Amazon Music';
+  if ($match(['tidal.com','tidal'])) return 'TIDAL';
+  if ($match(['deezer.com','deezer'])) return 'Deezer';
+  if ($match(['bandcamp.com','bandcamp'])) return 'Bandcamp';
+  if ($match(['audiomack.com','audiomack'])) return 'Audiomack';
+  return null;
+}
+function links_array_to_json(array $urls): string {
   $out = [];
-  foreach ($lines as $line) {
-    $label = null; $url = $line;
-    if (strpos($line, '|') !== false) { [$label, $url] = array_map('trim', explode('|', $line, 2)); }
+  foreach ($urls as $url) {
+    $url = trim((string)$url);
     if (!filter_var($url, FILTER_VALIDATE_URL)) continue;
-    $out[] = ['label' => $label ?: null, 'url' => $url];
+    $label = detect_service_label($url);
+    $out[] = ['label'=>$label, 'url'=>$url];
   }
   return json_encode($out, JSON_UNESCAPED_SLASHES);
 }
@@ -54,11 +71,11 @@ function download_image_to_uploads(string $url): ?string {
   return rtrim(UPLOAD_URI,'/').'/'.$name;
 }
 
-/* ---------- POST: create ---------- */
+/* ----------------- POST: create ----------------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $title        = trim($_POST['title']  ?? '');
   $artistInput  = trim($_POST['artist'] ?? '');
-  $links_raw    = $_POST['links_raw']  ?? '';
+  $urls         = $_POST['links_url']   ?? [];
   $auto_img_url = trim($_POST['auto_image_url'] ?? '');
   $published    = isset($_POST['published']) ? 1 : 0;
 
@@ -66,7 +83,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   $pdo    = db();
   $artist = $artistInput !== '' ? $artistInput : 'Unknown Artist';
-  $links_json = parse_links_to_json($links_raw);
 
   // Cover handling
   $cover_uri = null;
@@ -85,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // Build INSERT
   $cols=['user_id','title','links_json','published','created_at','updated_at'];
   $vals=[':uid',':title',':links_json',':pub','NOW()','NOW()'];
-  $par = [':uid'=>$user['id'], ':title'=>$title, ':links_json'=>$links_json, ':pub'=>$published];
+  $par = [':uid'=>$user['id'], ':title'=>$title, ':links_json'=>links_array_to_json((array)$urls), ':pub'=>$published];
 
   if (table_has_column($pdo,'pages','artist_name')) { $cols[]='artist_name'; $vals[]=':artist';  $par[':artist']=$artist; }
   if (table_has_column($pdo,'pages','artist'))      { $cols[]='artist';      $vals[]=':artist2'; $par[':artist2']=$artist; }
@@ -107,10 +123,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   header('Location: '.BASE_URL.'dashboard'); exit;
 }
 
-/* ---------- view ---------- */
+/* ----------------- view ----------------- */
 $title = 'New page';
-
-// Tiny CSS for the back button + title row
 $head = <<<HTML
 <style>
 .titlebar{display:flex;align-items:center;gap:12px;margin:0 0 16px}
@@ -123,7 +137,60 @@ $head = <<<HTML
 .backlink .icon{width:16px;height:16px;display:block}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media (max-width:700px){.form-grid{grid-template-columns:1fr}}
+
+/* links repeater */
+.links-wrap{margin-top:6px}
+.link-row{display:flex;align-items:center;gap:10px;margin:8px 0}
+.link-row .svc{min-width:108px;padding:6px 10px;border:1px solid #2a3344;border-radius:999px;background:#0f1217;color:#a1a1aa;text-align:center;font-size:12px}
+.link-row input[type="url"]{flex:1;padding:10px;border:1px solid #222;border-radius:10px;background:#0f0f16;color:#e5e7eb}
+.link-row .remove{background:#232938;border:1px solid #2a3344;color:#a1a1aa;padding:8px 10px;border-radius:10px}
+.add-link{margin-top:8px;background:#1f2937;border:1px solid #2a3344;color:#e5e7eb;padding:10px 12px;border-radius:10px}
+.small{font-size:.9rem;color:#a1a1aa}
 </style>
+<script>
+(function(){
+  const svcDetect = (url) => {
+    const u = (url||'').toLowerCase();
+    if (u.includes('spotify')) return 'Spotify';
+    if (u.includes('music.apple') || u.includes('itunes.apple')) return 'Apple Music';
+    if (u.includes('soundcloud')) return 'SoundCloud';
+    if (u.includes('youtu.be') || u.includes('youtube')) return 'YouTube';
+    if (u.includes('music.amazon') || u.includes('amazon.com/music')) return 'Amazon Music';
+    if (u.includes('tidal')) return 'TIDAL';
+    if (u.includes('deezer')) return 'Deezer';
+    if (u.includes('bandcamp')) return 'Bandcamp';
+    if (u.includes('audiomack')) return 'Audiomack';
+    return 'Link';
+  };
+
+  function makeRow(placeholder){
+    const row = document.createElement('div');
+    row.className = 'link-row';
+    row.innerHTML = `
+      <div class="svc">Spotify</div>
+      <input type="url" name="links_url[]" placeholder="\${placeholder||'Paste link'}" inputmode="url" spellcheck="false">
+      <button type="button" class="remove" aria-label="Remove">Remove</button>
+    `;
+    const input = row.querySelector('input');
+    const svc   = row.querySelector('.svc');
+    input.addEventListener('input', () => { svc.textContent = svcDetect(input.value); });
+    row.querySelector('.remove').addEventListener('click', () => row.remove());
+    return row;
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    const list = document.getElementById('links-list');
+    const add  = document.getElementById('add-link');
+
+    // if empty, seed one Spotify row
+    if (!list.children.length) list.appendChild(makeRow('Paste Spotify link'));
+
+    add.addEventListener('click', () => {
+      list.appendChild(makeRow('Paste link (Spotify, Apple Music, YouTube, etc.)'));
+    });
+  });
+})();
+</script>
 HTML;
 
 ob_start(); ?>
@@ -151,17 +218,16 @@ ob_start(); ?>
       </div>
     </div>
 
-    <div class="form-row" style="padding-left:0;padding-right:0">
-      <label class="small" style="display:block;margin-bottom:6px">Links (one per line, optionally “Label | URL”)</label>
-      <textarea name="links_raw" placeholder="Spotify | https://open.spotify.com/track/..."></textarea>
-      <div class="small" style="margin-top:6px;color:#a1a1aa">
-        Tip: add a label like <i>Spotify | https://...</i>. If no label, we’ll just save the URL.
-      </div>
+    <div class="links-wrap">
+      <label class="small" style="display:block;margin-bottom:6px">Links</label>
+      <div id="links-list"></div>
+      <button type="button" id="add-link" class="add-link">+ Add link</button>
+      <div class="small" style="margin-top:6px">Just paste URLs — we’ll detect the service automatically.</div>
     </div>
 
     <input type="hidden" name="auto_image_url" id="auto_image_url">
 
-    <div class="form-row" style="padding-left:0;padding-right:0">
+    <div class="form-row" style="padding-left:0;padding-right:0;margin-top:12px">
       <label class="small" style="display:block;margin-bottom:6px">Cover image (optional)</label>
       <input type="file" name="cover" accept="image/*">
     </div>
