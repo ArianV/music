@@ -88,8 +88,8 @@ input[type='text'],input[type='email'],input[type='password'],input[type='file']
 .status-published{ background:#10b981; border-color:#059669; color:#0b0b0c; font-weight:700; }
 .status-draft{ background:#8b5cf6; border-color:#6d28d9; color:#f5f3ff; font-weight:700; }
 
-/* Disabled copy button hint DISABLED FOR NOW
-.copy-btn[disabled]{ opacity:.6; cursor:not-allowed; } */
+/* Disabled copy button hint */
+.copy-btn[disabled]{ opacity:.6; cursor:not-allowed; }
 
 
 /* =========================
