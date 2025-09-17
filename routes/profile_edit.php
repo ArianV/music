@@ -145,7 +145,7 @@ ob_start(); ?>
       <img class="avatar" src="<?= e($avatar ?: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2212%22 fill=%22%230B0B0C%22/></svg>') ?>" alt="">
       <div>
         <label class="small">Avatar</label>
-        <input type="file" name="avatar" accept="image/*">
+        <input type="file" name="avatar" accept="image">
       </div>
     </div>
 
