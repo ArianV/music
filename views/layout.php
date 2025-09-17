@@ -25,7 +25,9 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
   <style>
     /* Navbar avatar menu */
     .nav{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #1f2430;background:#0b0b0c;position:sticky;top:0;z-index:50}
-    .brand{color:#7ef1c7;font-weight:600;text-decoration:none}
+    .brand{display:inline-flex;align-items:center;gap:8px;font-weight:700;text-decoration:none;color:#e5e7eb;}
+    .brand .logo{width:22px;height:22px;display:block;color:#7ef1c7}
+    .brand:hover{opacity:.9}
     .nav a.link{color:#bcd;color:#c7d2fe;text-decoration:none;margin-left:14px}
     .nav a.link:hover{opacity:.9}
     .nav-right{display:flex;align-items:center;gap:10px}
@@ -45,7 +47,14 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
 </head>
 <body>
   <header class="nav">
-    <a class="brand" href="<?= e(asset($me ? 'dashboard' : '')) ?>"><?= e($brand) ?></a>
+    <a class="brand" href="<?= e(asset($me ? 'dashboard' : '')) ?>">
+      <!-- Inline PlugBio mark (teal) -->
+      <svg class="logo" viewBox="0 0 24 24" aria-hidden="true">
+        <!-- simple “plug” mark with a subtle face notch; uses currentColor (teal via CSS) -->
+        <path fill="currentColor" d="M8 2h2v4h4V2h2v4h1.5A2.5 2.5 0 0 1 20 8.5V12a8 8 0 0 1-6 7.75V22h-4v-2.25A8 8 0 0 1 4 12V8.5A2.5 2.5 0 0 1 6.5 6H8V2Zm-1 8.5a.75.75 0 0 0 1.5 0 .75.75 0 0 0-1.5 0Zm8 0a.75.75 0 0 0 1.5 0 .75.75 0 0 0-1.5 0Z"/>
+      </svg>
+      <span>PlugBio</span>
+    </a>
 
     <div class="nav-right">
       <?php if ($me): ?>
