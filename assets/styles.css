@@ -41,6 +41,8 @@ body.layout{min-height:100vh;display:flex;flex-direction:column}
 .container{flex:1}
 .site-footer{margin-top:auto}
 
+.dash-header { padding-bottom: 20px; }
+
 /* =========================
    Topbar / brand (layout.php)
    ========================= */

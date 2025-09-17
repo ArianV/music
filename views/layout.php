@@ -21,7 +21,7 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
   <meta charset="utf-8">
   <title><?= e($title) ?></title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="<?= e(asset('assets/styles.css')) ?>">
+  <link rel="stylesheet" href="<?= e(asset('assets/styles.css?v4')) ?>">
   <style>
     /* Navbar avatar menu */
     .nav{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #1f2430;background:#0b0b0c;position:sticky;top:0;z-index:50}
