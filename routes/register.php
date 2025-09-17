@@ -102,7 +102,6 @@ ob_start(); ?>
     <div class="row">
       <label>Username</label>
       <input type="text" name="username" value="<?= e($_POST['username'] ?? '') ?>" required minlength="2" placeholder="lilfoaf">
-      <div class="muted">We’ll set your <b>handle</b> and <b>display name</b> to this (you can change later).</div>
     </div>
 
     <div class="row">
@@ -124,7 +123,6 @@ ob_start(); ?>
       <button class="btn btn-primary" type="submit">Create account</button>
     </div>
 
-    <div class="muted">By default your profile is <b>private</b>. You can switch it to public from <i>Settings → Edit profile</i>.</div>
   </form>
 </div>
 <?php
