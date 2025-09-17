@@ -7,7 +7,7 @@ csrf_check();
 $user = current_user();
 if (!$user) { header('Location: ' . BASE_URL . 'login'); exit; }
 
-/* ---------- helpers (scoped to this file) ---------- */
+/* ---------- helpers ---------- */
 function ml_slugify(string $s, int $maxLen = 80): string {
   $s = html_entity_decode($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
   $s = str_ireplace(['&','@','+'], [' and ',' at ',' plus '], $s);
@@ -24,20 +24,33 @@ function ml_unique_page_slug(PDO $pdo, int $userId, string $title, string $artis
   $sql  = "SELECT LOWER(slug) AS s FROM pages WHERE user_id = :uid AND slug ILIKE :like";
   $par  = [':uid'=>$userId, ':like'=>$base.'%'];
   if ($excludeId) { $sql .= " AND id <> :id"; $par[':id'] = $excludeId; }
-  $st = $pdo->prepare($sql); $st->execute($par);
+  $st = db()->prepare($sql); $st->execute($par);
   $taken = array_flip(array_column($st->fetchAll(PDO::FETCH_ASSOC), 's'));
   if (!isset($taken[$base])) return $base;
   for ($i=2; $i<=200; $i++) { $try = $base.'-'.$i; if (!isset($taken[$try])) return $try; }
   return $base.'-'.bin2hex(random_bytes(2));
 }
-function parse_links_to_json(?string $raw): string {
-  $lines = array_values(array_filter(array_map('trim', preg_split('/\r?\n/', (string)$raw))));
+function detect_service_label(string $url): ?string {
+  $u = strtolower($url);
+  $h = parse_url($u, PHP_URL_HOST) ?: '';
+  $hit = function(array $needles) use ($u,$h){ foreach ($needles as $n) if (str_contains($u,$n)||str_contains($h,$n)) return true; return false; };
+  if ($hit(['open.spotify.com','spotify'])) return 'Spotify';
+  if ($hit(['music.apple.com','itunes.apple.com','apple'])) return 'Apple Music';
+  if ($hit(['soundcloud.com','soundcloud'])) return 'SoundCloud';
+  if ($hit(['youtube.com','youtu.be','music.youtube'])) return 'YouTube';
+  if ($hit(['music.amazon','amazon.com/music'])) return 'Amazon Music';
+  if ($hit(['tidal.com','tidal'])) return 'TIDAL';
+  if ($hit(['deezer.com','deezer'])) return 'Deezer';
+  if ($hit(['bandcamp.com','bandcamp'])) return 'Bandcamp';
+  if ($hit(['audiomack.com','audiomack'])) return 'Audiomack';
+  return null;
+}
+function links_array_to_json(array $urls): string {
   $out = [];
-  foreach ($lines as $line) {
-    $label = null; $url = $line;
-    if (strpos($line, '|') !== false) { [$label, $url] = array_map('trim', explode('|', $line, 2)); }
+  foreach ($urls as $url) {
+    $url = trim((string)$url);
     if (!filter_var($url, FILTER_VALIDATE_URL)) continue;
-    $out[] = ['label' => $label ?: null, 'url' => $url];
+    $out[] = ['label'=>detect_service_label($url), 'url'=>$url];
   }
   return json_encode($out, JSON_UNESCAPED_SLASHES);
 }
@@ -54,7 +67,7 @@ function download_image_to_uploads(string $url): ?string {
   return rtrim(UPLOAD_URI,'/').'/'.$name;
 }
 
-/* ---------- which page? (id or slug from router) ---------- */
+/* ---------- load page (id or slug) ---------- */
 $key = $GLOBALS['page_id'] ?? null;
 if (!$key && isset($_GET['id'])) $key = $_GET['id'];
 if (!$key) { http_response_code(404); exit('Page not found'); }
@@ -77,16 +90,16 @@ $cover_val  = $page['cover_uri'] ?? $page['cover_url'] ?? $page['cover_image'] ?
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $title        = trim($_POST['title']  ?? '');
   $artistInput  = trim($_POST['artist'] ?? '');
-  $links_raw    = $_POST['links_raw']  ?? '';
+  $urls         = $_POST['links_url']   ?? [];
   $auto_img_url = trim($_POST['auto_image_url'] ?? '');
   $published    = isset($_POST['published']) ? 1 : 0;
 
   if ($title === '') { http_response_code(422); exit('Title is required'); }
 
   $artist     = $artistInput !== '' ? $artistInput : 'Unknown Artist';
-  $links_json = parse_links_to_json($links_raw);
+  $links_json = links_array_to_json((array)$urls);
 
-  // Cover handling (keep current unless replaced)
+  // Cover: keep unless replaced
   $cover_uri = $cover_val;
   if (!empty($_FILES['cover']['name'] ?? '')) {
     $safeName = time().'_'.preg_replace('/[^a-zA-Z0-9._-]/', '', $_FILES['cover']['name']);
@@ -100,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($saved) $cover_uri = $saved;
   }
 
-  // Build dynamic UPDATE
+  // Dynamic UPDATE
   $sets = [];
   $par  = [':id'=>$page['id'], ':uid'=>$user['id']];
 
@@ -130,10 +143,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   header('Location: '.BASE_URL.'dashboard'); exit;
 }
 
+/* ---------- prefill links for UI ---------- */
+$existing_links = [];
+if (!empty($page['links_json'])) {
+  $arr = json_decode($page['links_json'], true) ?: [];
+  foreach ($arr as $it) {
+    $u = trim((string)($it['url'] ?? ''));
+    if (!$u) continue;
+    $existing_links[] = [
+      'url'   => $u,
+      'label' => $it['label'] ?? detect_service_label($u) ?? 'Link',
+    ];
+  }
+}
+
 /* ---------- view ---------- */
 $title = 'Edit page';
 
-// head styles (back button + grid)
 $head = <<<HTML
 <style>
 .titlebar{display:flex;align-items:center;gap:12px;margin:0 0 16px}
@@ -147,7 +173,62 @@ $head = <<<HTML
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media (max-width:700px){.form-grid{grid-template-columns:1fr}}
 img.cover{max-width:180px;border-radius:10px;border:1px solid #253041;display:block;margin-top:8px}
+
+/* links repeater */
+.links-wrap{margin-top:6px}
+.link-row{display:flex;align-items:center;gap:10px;margin:8px 0}
+.link-row .svc{min-width:108px;padding:6px 10px;border:1px solid #2a3344;border-radius:999px;background:#0f1217;color:#a1a1aa;text-align:center;font-size:12px}
+.link-row input[type="url"]{flex:1;padding:10px;border:1px solid #222;border-radius:10px;background:#0f0f16;color:#e5e7eb}
+.link-row .remove{background:#232938;border:1px solid #2a3344;color:#a1a1aa;padding:8px 10px;border-radius:10px}
+.add-link{margin-top:8px;background:#1f2937;border:1px solid #2a3344;color:#e5e7eb;padding:10px 12px;border-radius:10px}
+.small{font-size:.9rem;color:#a1a1aa}
 </style>
+<script>
+(function(){
+  const svcDetect = (url) => {
+    const u = (url||'').toLowerCase();
+    if (u.includes('spotify')) return 'Spotify';
+    if (u.includes('music.apple') || u.includes('itunes.apple')) return 'Apple Music';
+    if (u.includes('soundcloud')) return 'SoundCloud';
+    if (u.includes('youtu.be') || u.includes('youtube')) return 'YouTube';
+    if (u.includes('music.amazon') || u.includes('amazon.com/music')) return 'Amazon Music';
+    if (u.includes('tidal')) return 'TIDAL';
+    if (u.includes('deezer')) return 'Deezer';
+    if (u.includes('bandcamp')) return 'Bandcamp';
+    if (u.includes('audiomack')) return 'Audiomack';
+    return 'Link';
+  };
+
+  function makeRow(initialUrl, placeholder){
+    const row = document.createElement('div');
+    row.className = 'link-row';
+    const label = svcDetect(initialUrl||'');
+    row.innerHTML = `
+      <div class="svc">\${label}</div>
+      <input type="url" name="links_url[]" value="\${initialUrl?initialUrl.replace(/"/g,'&quot;'):''}" placeholder="\${placeholder||'Paste link'}" inputmode="url" spellcheck="false">
+      <button type="button" class="remove" aria-label="Remove">Remove</button>
+    `;
+    const input = row.querySelector('input');
+    const svc   = row.querySelector('.svc');
+    input.addEventListener('input', () => { svc.textContent = svcDetect(input.value); });
+    row.querySelector('.remove').addEventListener('click', () => row.remove());
+    return row;
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    const list = document.getElementById('links-list');
+    const add  = document.getElementById('add-link');
+    // seed from data-prefill
+    const pre = JSON.parse(document.getElementById('prefill-links').textContent || '[]');
+    if (pre.length) pre.forEach(u => list.appendChild(makeRow(u, 'Paste link')));
+    if (!pre.length) list.appendChild(makeRow('', 'Paste Spotify link'));
+
+    add.addEventListener('click', () => {
+      list.appendChild(makeRow('', 'Paste link (Spotify, Apple Music, YouTube, etc.)'));
+    });
+  });
+})();
+</script>
 HTML;
 
 ob_start(); ?>
@@ -175,21 +256,18 @@ ob_start(); ?>
       </div>
     </div>
 
-    <div class="form-row" style="padding-left:0;padding-right:0">
-      <label class="small" style="display:block;margin-bottom:6px">Links (one per line, optionally “Label | URL”)</label>
-      <textarea name="links_raw"><?php
-        $links = $page['links_json'] ?? '[]';
-        $arr = json_decode($links, true) ?: [];
-        foreach ($arr as $it) {
-          $label = trim((string)($it['label'] ?? ''));
-          $url   = trim((string)($it['url'] ?? ''));
-          echo e($label ? ($label.' | '.$url) : $url), "\n";
-        }
-      ?></textarea>
-      <div class="small" style="margin-top:6px;color:#a1a1aa">
-        Tip: add a label like <i>Spotify | https://...</i>. If no label, we’ll just save the URL.
-      </div>
+    <div class="links-wrap">
+      <label class="small" style="display:block;margin-bottom:6px">Links</label>
+      <div id="links-list"></div>
+      <button type="button" id="add-link" class="add-link">+ Add link</button>
+      <div class="small" style="margin-top:6px">Just paste URLs — we’ll detect the service automatically.</div>
     </div>
+
+    <script type="application/json" id="prefill-links"><?php
+      $urls = [];
+      foreach ($existing_links as $it) { $urls[] = $it['url']; }
+      echo json_encode($urls, JSON_UNESCAPED_SLASHES);
+    ?></script>
 
     <input type="hidden" name="auto_image_url" id="auto_image_url">
 
