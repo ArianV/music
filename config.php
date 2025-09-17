@@ -66,9 +66,12 @@ if (!function_exists('db')) {
       $user   = $parts['user'] ?? '';
       $pass   = $parts['pass'] ?? '';
       $pdo = new PDO("pgsql:host=$host;port=$port;dbname=$dbname", $user, $pass, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES   => true,
+        PDO::ATTR_STRINGIFY_FETCHES  => false,
       ]);
+
       return $pdo;
     }
 
@@ -79,10 +82,13 @@ if (!function_exists('db')) {
     $user = getenv('PGUSER')      ?: getenv('PG_USER') ?: getenv('DB_USER') ?: 'postgres';
     $pass = getenv('PGPASSWORD')  ?: getenv('PG_PASS') ?: getenv('DB_PASS') ?: '';
 
-    $pdo = new PDO("pgsql:host=$host;port=$port;dbname=$name", $user, $pass, [
-      PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+    $pdo = new PDO("pgsql:host=$host;port=$port;dbname=$dbname", $user, $pass, [
+      PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
       PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+      PDO::ATTR_EMULATE_PREPARES   => true,
+      PDO::ATTR_STRINGIFY_FETCHES  => false,
     ]);
+
     return $pdo;
   }
 }
