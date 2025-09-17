@@ -2,138 +2,94 @@
 // routes/profile_view.php
 require_once __DIR__ . '/../config.php';
 
-$pdo    = db();
-$handle = $GLOBALS['handle'] ?? ($_GET['handle'] ?? null);
-if (!$handle) { http_response_code(404); exit('Not found'); }
+$pdo = db();
+$me  = current_user();
 
-/* artist by handle (case-insensitive) */
-$st = $pdo->prepare("SELECT * FROM users WHERE lower(handle)=lower(:h) LIMIT 1");
+$handle = $GLOBALS['handle'] ?? '';
+if ($handle === '') { http_response_code(404); exit('Not found'); }
+
+// load the profile owner
+$st = $pdo->prepare("SELECT * FROM users WHERE lower(handle) = lower(:h) LIMIT 1");
 $st->execute([':h' => $handle]);
-$artist = $st->fetch(PDO::FETCH_ASSOC);
-if (!$artist) { http_response_code(404); exit('Not found'); }
+$owner = $st->fetch(PDO::FETCH_ASSOC);
+if (!$owner) { http_response_code(404); exit('User not found'); }
 
-/* viewer & visibility */
-$viewer_id = (int)($GLOBALS['__current_user_id'] ?? (current_user()['id'] ?? 0));
-$is_owner  = $viewer_id && $viewer_id === (int)$artist['id'];
-$is_public = (bool)($artist['profile_public'] ?? false);
+$isOwner = $me && ((int)$me['id'] === (int)$owner['id']);
+$isPublic = (bool)($owner['profile_public'] ?? false);
 
-if (!$is_public && !$is_owner) {
-  // Private profile for the public
-  http_response_code(403);
-  $title = 'Private profile';
-  $head  = '<meta name="robots" content="noindex">';
+if (!$isPublic && !$isOwner) {
+  // private profile view
+  $title = 'Profile is private';
   ob_start(); ?>
-  <article class="card" style="max-width:420px;margin:24px auto;text-align:center;padding:28px">
-    <div style="display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;border-radius:14px;background:#0f1217;border:1px solid #2a3344;margin-bottom:12px">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-        <path d="M7 10V8a5 5 0 0 1 10 0v2m-9 0h8a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2Z"
-              stroke="#a1a1aa" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </div>
-    <h1 class="title" style="margin:0 0 6px">This profile is private</h1>
-    <p class="artist" style="margin:0 0 14px">The artist hasn’t made their profile public.</p>
-  </article>
+  <div class="card" style="max-width:640px;margin:40px auto;padding:22px;border:1px solid #202636;border-radius:14px;background:#0f1217">
+    <h1 style="margin-top:0">This profile is private</h1>
+    <p class="muted">The owner has not made their profile public.</p>
+  </div>
   <?php
   $content = ob_get_clean();
   require __DIR__ . '/../views/layout.php';
   exit;
 }
 
-/* render data */
-$display = $artist['display_name'] ?: $artist['handle'];
-$bio     = $artist['bio'] ?? '';
-$avatar  = $artist['avatar_uri'] ?? null;
-$socials = json_decode($artist['socials_json'] ?? '[]', true) ?: [];
-
-/* helper: get column data type */
-$published_filter = '';
-if (table_has_column($pdo, 'pages', 'published')) {
-  $typeStmt = $pdo->prepare("
-    SELECT data_type
-    FROM information_schema.columns
-    WHERE table_schema = current_schema()
-      AND table_name = 'pages' AND column_name = 'published'
-    LIMIT 1
-  ");
-  $typeStmt->execute();
-  $dt = strtolower((string)($typeStmt->fetchColumn() ?: ''));
-  if ($dt === 'boolean') {
-    $published_filter = " AND published IS TRUE";
-  } else {
-    $published_filter = " AND published = 1";
-  }
-}
-
-/* pages: only published (owner also sees published list here; drafts remain private via /dashboard) */
-$order = table_has_column($pdo,'pages','updated_at') ? 'updated_at DESC NULLS LAST, id DESC' : 'id DESC';
-$sql = "SELECT * FROM pages WHERE user_id=:uid".$published_filter." ORDER BY $order";
-$st  = $pdo->prepare($sql);
-$st->execute([':uid'=>$artist['id']]);
+// fetch owner’s published pages
+$q = "SELECT id, title, slug, cover_uri, links_json, updated_at
+      FROM pages
+      WHERE user_id = :uid";
+$params = [':uid' => (int)$owner['id']];
+if (!$isOwner) { $q .= " AND published = TRUE"; }
+$q .= " ORDER BY updated_at DESC NULLS LAST, id DESC";
+$st = $pdo->prepare($q);
+$st->execute($params);
 $pages = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-/* banner if owner & private */
-$banner = '';
-if (!$is_public && $is_owner) {
-  $banner = '<div style="max-width:820px;margin:8px auto 0;padding:8px 12px;border:1px solid #8b5cf6;border-radius:10px;background:#151325;color:#e5e7eb;font-size:13px">'
-          . 'Your profile is <b>private</b>. Toggle it on your <a class="link" href="'.e(asset('profile')).'" style="color:#a78bfa">Profile</a> page.'
-          . '</div>';
-}
+$avatar = $owner['avatar_uri'] ?? null;
+$display = $owner['display_name'] ?? $owner['handle'];
+$title = $display . ' • Profile';
 
-/* page chrome */
-$title = $display . ' · PlugBio';
-$head  = '';
-
-function social_icon(string $k): string {
-  $map = ['website'=>'🌐','twitter'=>'𝕏','instagram'=>'◎','tiktok'=>'🎵','youtube'=>'▶','soundcloud'=>'☁','bandcamp'=>'⏵','spotify'=>'🟢','apple'=>'🍎'];
-  return $map[$k] ?? '↗';
-}
+$head = <<<CSS
+<style>
+.profile{max-width:900px;margin:24px auto}
+.header{display:flex;gap:16px;align-items:center;margin-bottom:18px}
+.pfp{width:80px;height:80px;border-radius:999px;object-fit:cover;border:1px solid #263142;background:#0f1217}
+.mono{color:#a1a1aa;font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.card-page{background:#111318;border:1px solid #1f2430;border-radius:12px;padding:12px}
+.card-page img{width:100%;height:160px;object-fit:cover;border-radius:8px;border:1px solid #253041;background:#0f1217}
+.btn{display:inline-flex;align-items:center;gap:8px;background:#1f2937;color:#e5e7eb;border:1px solid #2a3344;border-radius:10px;padding:8px 12px;text-decoration:none}
+.btn:hover{background:#232e44}
+</style>
+CSS;
 
 ob_start(); ?>
-<article class="card" style="max-width:820px;margin:24px auto;">
-  <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-    <img src="<?= e($avatar ?: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2212%22 fill=%22%230B0B0C%22/></svg>') ?>"
-         class="avatar" style="width:88px;height:88px;border-radius:50%;object-fit:cover;border:1px solid #263142;background:#0f1217" alt="">
-    <div style="min-width:220px">
-      <h1 class="title" style="margin:0 0 4px"><?= e($display) ?></h1>
-      <div class="small" style="color:#a1a1aa">@<?= e($artist['handle']) ?></div>
-      <?php if ($bio): ?><p style="margin:8px 0 0;white-space:pre-line"><?= e($bio) ?></p><?php endif; ?>
-      <?php if ($socials): ?>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
-          <?php foreach ($socials as $k=>$u): if (!$u) continue; ?>
-            <a class="btn" style="padding:6px 10px" href="<?= e($u) ?>" target="_blank" rel="noopener"><?= social_icon($k) ?> <?= e(ucfirst($k)) ?></a>
-          <?php endforeach; ?>
-        </div>
-      <?php endif; ?>
+<div class="profile">
+  <div class="header">
+    <img class="pfp" src="<?= e($avatar ?: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2212%22 fill=%22%230B0B0C%22/></svg>') ?>" alt="">
+    <div>
+      <h1 style="margin:0 0 6px"><?= e($display) ?></h1>
+      <div class="mono">@<?= e($owner['handle'] ?? '') ?></div>
     </div>
+    <div style="flex:1"></div>
+    <?php if ($isOwner): ?>
+      <a class="btn" href="<?= e(asset('profile')) ?>">Edit profile</a>
+    <?php endif; ?>
   </div>
 
   <?php if ($pages): ?>
-    <div style="margin-top:18px">
-      <h2 style="font-size:18px;margin:0 0 8px">Releases</h2>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">
-        <?php foreach ($pages as $p):
-          $slug  = ($p['slug'] ?? '') !== '' ? $p['slug'] : $p['id'];
-          $cover = page_cover($p);
-          $url   = rtrim(BASE_URL,'/').'/s/'.rawurlencode($slug);
-        ?>
-          <a class="card" href="<?= e($url) ?>" style="text-decoration:none">
-            <?php if ($cover): ?>
-              <img src="<?= e($cover) ?>" alt="" style="width:100%;height:150px;object-fit:cover;border-radius:10px">
-            <?php else: ?>
-              <div style="width:100%;height:150px;border:1px solid #263142;border-radius:10px;background:#0f1217"></div>
-            <?php endif; ?>
-            <div style="padding:10px 8px">
-              <div class="title" style="font-size:16px;margin:0"><?= e($p['title'] ?? 'Untitled') ?></div>
-            </div>
-          </a>
-        <?php endforeach; ?>
-      </div>
+    <div class="grid">
+      <?php foreach ($pages as $p): $cover = $p['cover_uri'] ?? null; ?>
+        <a class="card-page" href="<?= e(asset('s/' . rawurlencode($p['slug'] ?: $p['id']))) ?>">
+          <?php if ($cover): ?><img src="<?= e($cover) ?>" alt=""><?php endif; ?>
+          <div style="margin-top:8px">
+            <div style="font-weight:600"><?= e($p['title'] ?? 'Untitled') ?></div>
+            <div class="mono"><?= e(date('M j, Y', strtotime($p['updated_at'] ?? 'now'))) ?></div>
+          </div>
+        </a>
+      <?php endforeach; ?>
     </div>
   <?php else: ?>
-    <p style="margin-top:16px;color:#9ca3af">No published pages yet.</p>
+    <div class="mono">No pages yet.</div>
   <?php endif; ?>
-</article>
-<?= $banner ?>
+</div>
 <?php
 $content = ob_get_clean();
 require __DIR__ . '/../views/layout.php';
