@@ -39,6 +39,16 @@ if (!function_exists('e')) {
   }
 }
 
+
+// App name (used in <title>, header, etc.)
+if (!defined('APP_NAME')) define('APP_NAME', 'PlugBio');
+
+if (!function_exists('app_name')) {
+  function app_name(): string { return defined('APP_NAME') ? APP_NAME : 'PlugBio'; }
+}
+
+
+
 // ---------- Database (PDO Postgres) ----------
 if (!function_exists('db')) {
   function db(): PDO {

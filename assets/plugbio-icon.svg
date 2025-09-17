@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- plug prongs -->
+  <rect x="20" y="6" width="6" height="14" rx="2" fill="currentColor"/>
+  <rect x="38" y="6" width="6" height="14" rx="2" fill="currentColor"/>
+  <!-- plug body -->
+  <rect x="14" y="18" width="36" height="26" rx="8" stroke="currentColor" stroke-width="4"/>
+  <!-- cable -->
+  <path d="M50 31c8 0 8 12 0 12-9 0-14 8-22 8" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
+  <!-- tiny pulse inside body -->
+  <path d="M20 31h6l3-6 4 14 3-8h8" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
