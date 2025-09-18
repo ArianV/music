@@ -214,7 +214,7 @@ ob_start(); ?>
       </div>
       <div>
         <label class="small">Artist</label>
-        <input type="text" name="artist" placeholder="Artist name (optional)">
+        <input type="text" name="artist" required placeholder="Artist name">
       </div>
     </div>
 

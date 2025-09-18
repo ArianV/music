@@ -227,7 +227,7 @@ ob_start(); ?>
         <label>Handle</label>
         <div style="display:flex;gap:8px;align-items:center">
           <span class="muted">@</span>
-          <input type="text" name="handle" value="<?= e($handle) ?>" placeholder="lilfoaf">
+          <input type="text" name="handle" value="<?= e($handle) ?>" placeholder="ex. lilfoaf">
         </div>
         <div class="muted">Your public URL: <?= e(asset('u/'.($handle?:'me'))) ?></div>
       </div>
