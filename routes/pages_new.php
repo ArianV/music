@@ -230,19 +230,45 @@ ob_start(); ?>
     <input type="hidden" name="auto_image_url" id="auto_image_url">
 
     <div class="form-row" style="padding-left:0;padding-right:0;margin-top:12px">
-      <label class="small" style="display:block;margin-bottom:6px">Cover image (optional)</label>
+      <label class="small" style="display:block;margin-bottom:6px">Cover image</label>
       <input type="file" name="cover" accept="image/*">
     </div>
 
     <div class="form-row" style="align-items:center;padding-left:0">
-      div class="row">
-       <label>Status</label>
-       <select name="published" aria-label="Page status">
-         <option value="0" <?= (($_POST['published'] ?? '0') !== '1') ? 'selected' : '' ?>>Draft (private)</option>
-         <option value="1" <?= (($_POST['published'] ?? '0') === '1') ? 'selected' : '' ?>>Published</option>
-       </select>
-       <div class="muted" style="margin-top:6px">Draft pages are private and can’t be viewed until you publish.</div>
-      /div>
+
+    
+      <?php $is_pub = (($_POST['published'] ?? '0') === '1'); ?>
+      <div class="row">
+        <div class="status-row">
+          <label>Status</label>
+          <span id="status-pill" class="pill <?= $is_pub ? 'published' : 'draft' ?>">
+            <?= $is_pub ? 'Published' : 'Draft' ?>
+          </span>
+        </div>
+
+        <select name="published" id="published-select" aria-label="Page status">
+          <option value="0" <?= $is_pub ? '' : 'selected' ?>>Draft (private)</option>
+          <option value="1" <?= $is_pub ? 'selected' : '' ?>>Published</option>
+        </select>
+      </div>
+
+      <script>
+      (function(){
+        var sel  = document.getElementById('published-select');
+        var pill = document.getElementById('status-pill');
+        if(!sel || !pill) return;
+        function sync(){
+          var pub = sel.value === '1';
+          pill.textContent = pub ? 'Published' : 'Draft';
+          pill.classList.toggle('published', pub);
+          pill.classList.toggle('draft', !pub);
+        }
+        sel.addEventListener('change', sync);
+        sync();
+      })();
+      </script>
+
+
     </div>
 
     <div class="form-row" style="padding-left:0">

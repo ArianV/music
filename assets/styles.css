@@ -88,6 +88,19 @@ input[type='text'],input[type='email'],input[type='password'],input[type='file']
 .status-published{ background:#10b981; border-color:#059669; color:#0b0b0c; font-weight:700; }
 .status-draft{ background:#8b5cf6; border-color:#6d28d9; color:#f5f3ff; font-weight:700; }
 
+/* status pill */
+.pill {
+  display:inline-flex; align-items:center;
+  padding:4px 10px; border-radius:999px;
+  font-size:12px; line-height:1; border:1px solid transparent;
+}
+.pill.published { background:#0b2f22; border-color:#22c55e; color:#bbf7d0; }
+.pill.draft     { background:#261936; border-color:#a855f7; color:#e9d5ff; }
+
+/* label + pill on one line */
+.status-row { display:flex; align-items:center; gap:10px; justify-content:space-between; }
+@media (max-width:520px){ .status-row{ align-items:flex-end; } }
+
 /* Disabled copy button hint */
 .copy-btn[disabled]{ opacity:.6; cursor:not-allowed; }
 
