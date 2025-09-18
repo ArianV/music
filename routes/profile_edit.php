@@ -209,6 +209,7 @@ ob_start(); ?>
         <div class="muted">PNG/JPG/WEBP. We’ll resize on the client.</div>
       </div>
       <div class="row">
+      <div style="height: 90px;"></div>
         <label>Profile visibility</label>
         <select name="profile_public">
           <option value="">— Keep current (<?= $public?'Public':'Private' ?>) —</option>
