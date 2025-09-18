@@ -225,78 +225,90 @@ if (!function_exists('smtp_send')) {
   }
 }
 
-// Start a "email" verification flow 
+// --- VERIFY EMAIL (uses users.verify_token_hash / users.verify_token_expires) ---
 if (!function_exists('begin_email_verification')) {
   function begin_email_verification(int $user_id): bool {
-      $pdo = db();
-      $st  = $pdo->prepare('SELECT id, email, handle FROM users WHERE id=:id');
-      $st->execute([':id' => $user_id]);
-      $u = $st->fetch();
-      if (!$u || empty($u['email'])) return false;
+    $pdo = db();
 
-      // create/replace token
-      $token = bin2hex(random_bytes(32));
-      $pdo->prepare('
-          INSERT INTO email_verifications (user_id, token, created_at)
-          VALUES (:uid, :t, NOW())
-          ON CONFLICT (user_id) DO UPDATE SET token = EXCLUDED.token, created_at = NOW()
-      ')->execute([':uid' => $user_id, ':t' => $token]);
+    // Get the user (email + display name/handle)
+    $st = $pdo->prepare('SELECT email, handle, display_name FROM users WHERE id=:id');
+    $st->execute([':id' => $user_id]);
+    $u = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$u || empty($u['email'])) return false;
 
-      // link + HTML
-      $verifyUrl = asset('verify-email?uid=' . $user_id . '&token=' . $token);
+    // Create token (24h)
+    $token = bin2hex(random_bytes(32));
+    $hash  = hash('sha256', $token);
+    $exp   = (new DateTime('+24 hours'))->format('Y-m-d H:i:sP');
 
-      if (function_exists('render_verify_email')) {
-          [$subject, $html, $text] = render_verify_email($u['handle'] ?: 'there', $verifyUrl);
-      } else {
-          // very small fallback, just in case
-          $subject = 'Verify your email for PlugBio';
-          $html    = '<p>Verify your email: <a href="'.e($verifyUrl).'">'.e($verifyUrl).'</a></p>';
-          $text    = "Verify your email: {$verifyUrl}";
-      }
+    $pdo->prepare('UPDATE users SET verify_token_hash = :h, verify_token_expires = :e WHERE id = :id')
+        ->execute([':h' => $hash, ':e' => $exp, ':id' => $user_id]);
 
-      return send_mail($u['email'], $subject, $html, $text);
+    // Build absolute link
+    $verifyUrl = rtrim(BASE_URL, '/') . '/verify-email?uid=' . $user_id . '&token=' . $token;
+
+    // Use the branded template (fallback to simple text if missing)
+    if (function_exists('render_verify_email')) {
+      [$subject, $html, $text] = render_verify_email($u['display_name'] ?? $u['handle'] ?? 'there', $verifyUrl);
+    } else {
+      $subject = 'Verify your email for PlugBio';
+      $html = '<p>Verify your email: <a href="'.e($verifyUrl).'">'.e($verifyUrl).'</a></p>';
+      $text = "Verify your email: {$verifyUrl}";
+    }
+
+    $dbg = [];
+    $ok = send_mail($u['email'], $subject, $html, $text, $dbg);
+    if (!$ok) error_log('[mail] verify send failed: '.implode(' | ', $dbg));
+    return $ok;
   }
 }
 
-// Email change NEW EMAIL
+// --- EMAIL CHANGE (uses users.pending_email / pending_email_token_hash / pending_email_expires) ---
 if (!function_exists('begin_email_change')) {
   function begin_email_change(int $user_id, string $newEmail): bool {
-      $pdo = db();
-      $st  = $pdo->prepare('SELECT id, handle FROM users WHERE id=:id');
-      $st->execute([':id' => $user_id]);
-      $u = $st->fetch();
-      if (!$u) return false;
-  
-      // store pending email + token
-      $token = bin2hex(random_bytes(32));
-      $pdo->prepare('
-          INSERT INTO email_change_requests (user_id, new_email, token, created_at)
-          VALUES (:uid, :em, :t, NOW())
-          ON CONFLICT (user_id) DO UPDATE SET new_email = EXCLUDED.new_email, token = EXCLUDED.token, created_at = NOW()
-      ')->execute([
-          ':uid' => $user_id,
-          ':em'  => $newEmail,
-          ':t'   => $token
-      ]);
-    
-      $verifyChangeUrl = asset('verify-email-change?uid=' . $user_id . '&token=' . $token);
-    
-      // Reuse the same nice template (wording still works for “confirm your email”).
-      if (function_exists('render_verify_email')) {
-          [$subject, $html, $text] = render_verify_email($u['handle'] ?: 'there', $verifyChangeUrl);
-          // Tweak the subject to make it clear this is for a change:
-          $subject = 'Confirm your new email for PlugBio';
-          // (Optional) you can also tweak the heading inside email_templates.php if you want separate copy.
-      } else {
-          $subject = 'Confirm your new email for PlugBio';
-          $html    = '<p>Confirm your new email: <a href="'.e($verifyChangeUrl).'">'.e($verifyChangeUrl).'</a></p>';
-          $text    = "Confirm your new email: {$verifyChangeUrl}";
-      }
-    
-      return send_mail($newEmail, $subject, $html, $text);
+    $pdo = db();
+
+    $st = $pdo->prepare('SELECT handle, display_name FROM users WHERE id=:id');
+    $st->execute([':id' => $user_id]);
+    $u = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$u) return false;
+
+    // Create token (24h)
+    $token = bin2hex(random_bytes(32));
+    $hash  = hash('sha256', $token);
+    $exp   = (new DateTime('+24 hours'))->format('Y-m-d H:i:sP');
+
+    $pdo->prepare('UPDATE users
+      SET pending_email = :em,
+          pending_email_token_hash = :h,
+          pending_email_expires = :x
+      WHERE id = :id')
+      ->execute([':em'=>$newEmail, ':h'=>$hash, ':x'=>$exp, ':id'=>$user_id]);
+
+    $confirmUrl = rtrim(BASE_URL, '/') . '/verify-email-change?uid=' . $user_id . '&token=' . $token;
+
+    // Use a “confirm your new email” template (or reuse verify template with tweaked subject)
+    if (function_exists('render_change_email')) {
+      [$subject, $html, $text] = render_change_email($u['display_name'] ?? $u['handle'] ?? 'there', $confirmUrl);
+    } elseif (function_exists('render_verify_email')) {
+      [$subject, $html, $text] = render_verify_email($u['display_name'] ?? $u['handle'] ?? 'there', $confirmUrl);
+      $subject = 'Confirm your new email for PlugBio';
+      $html = str_replace('Verify your email', 'Confirm your new email', $html);
+      $html = str_replace('Verify email', 'Confirm email', $html);
+      $text = str_replace('Verify your email', 'Confirm your new email', $text);
+      $text = str_replace('Verify email', 'Confirm email', $text);
+    } else {
+      $subject = 'Confirm your new email for PlugBio';
+      $html = '<p>Confirm your new email: <a href="'.e($confirmUrl).'">'.e($confirmUrl).'</a></p>';
+      $text = "Confirm your new email: {$confirmUrl}";
+    }
+
+    $dbg = [];
+    $ok = send_mail($newEmail, $subject, $html, $text, $dbg);
+    if (!$ok) error_log('[mail] change-email send failed: '.implode(' | ', $dbg));
+    return $ok;
   }
 }
-
 
 // Uploads 
 $uploadDirEnv = getenv('UPLOAD_DIR');
