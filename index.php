@@ -35,6 +35,9 @@ route('/email-diag', 'routes/email_diag.php');
 // Email senders
 route('/verify-email',   'routes/verify_email.php');
 route('/verify-resend',  'routes/verify_resend.php');
+// Email change senders
+route('/verify-email-change',        'routes/verify_email_change.php');
+route('/verify-email-change/resend', 'routes/verify_email_change_resend.php');
 
 // ---- pages (slugs or numeric ids) — SPECIFIC FIRST
 route_regex('#^/pages/([^/]+)/edit/?$#', 'routes/pages_edit.php',   ['page_id' => 1]);

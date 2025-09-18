@@ -119,7 +119,7 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
           </button>
           <div class="menu" id="navMenu" hidden>
             <a href="<?= e($myProfileUrl) ?>">My profile</a>
-            <a href="<?= e(asset('profile')) ?>">Settings</a>
+            <a href="<?= e(asset('settings')) ?>">Settings</a>
             <hr>
             <a href="<?= e(asset('logout')) ?>">Logout</a>
           </div>
@@ -131,7 +131,7 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
     </div>
   </header>
 
-  
+
   <?php if ($u = current_user()): ?>
     <?php if (!is_verified($u)): ?>
       <div style="background:#3a2a06;border:1px solid #a16207;color:#fde68a;padding:10px 14px;margin:10px auto;border-radius:10px;max-width:1100px">

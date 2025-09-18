@@ -8,101 +8,98 @@ $u = current_user();
 $errors = [];
 $saved  = false;
 
-// helpers
+// helpers (same rules as before)
 function normalize_handle(string $h): string {
-    $h = strtolower(trim($h));
-    // allow a-z, 0-9, underscore; 3-20 chars
-    $h = preg_replace('/[^a-z0-9_]/', '', $h);
-    return substr($h, 0, 20);
+  $h = strtolower(trim($h));
+  $h = preg_replace('/[^a-z0-9_]/', '', $h);
+  return substr($h, 0, 20);
 }
 function handle_is_valid(string $h): bool {
-    return (bool)preg_match('/^[a-z0-9_]{3,20}$/', $h);
+  return (bool)preg_match('/^[a-z0-9_]{3,20}$/', $h);
 }
 function clean_phone(?string $p): ?string {
-    if ($p === null) return null;
-    $p = trim($p);
-    if ($p === '') return null;
-    // keep digits and leading +
-    $p = ltrim($p, '+');
-    $p = preg_replace('/\D+/', '', $p);
-    return $p ? ('+' . $p) : null;
+  if ($p === null) return null;
+  $p = trim($p);
+  if ($p === '') return null;
+  $p = ltrim($p, '+');
+  $p = preg_replace('/\D+/', '', $p);
+  return $p ? ('+' . $p) : null;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $which = $_POST['form'] ?? '';
+  $which = $_POST['form'] ?? '';
 
-    if ($which === 'basics') {
-        $email  = trim($_POST['email'] ?? '');
-        $handle = normalize_handle($_POST['handle'] ?? ($u['handle'] ?? ''));
-        $phone  = clean_phone($_POST['phone'] ?? null);
+  if ($which === 'basics') {
+    $email  = trim($_POST['email'] ?? '');
+    $handle = normalize_handle($_POST['handle'] ?? ($u['handle'] ?? ''));
+    $phone  = clean_phone($_POST['phone'] ?? null);
 
-        // validate email
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $errors[] = 'Please enter a valid email address.';
-        } else {
-            // email uniqueness (optional: allow same as current)
-            $st = db()->prepare('SELECT id FROM users WHERE lower(email)=lower(:e) AND id<>:me LIMIT 1');
-            $st->execute([':e'=>$email, ':me'=>$u['id']]);
-            if ($st->fetch()) $errors[] = 'That email is already in use.';
-        }
-
-        // validate handle
-        if (!handle_is_valid($handle)) {
-            $errors[] = 'Username must be 3–20 characters and contain only letters, numbers, or underscores.';
-        } else {
-            $st = db()->prepare('SELECT id FROM users WHERE lower(handle)=lower(:h) AND id<>:me LIMIT 1');
-            $st->execute([':h'=>$handle, ':me'=>$u['id']]);
-            if ($st->fetch()) $errors[] = 'That username is taken.';
-        }
-
-        if (!$errors) {
-            // build safe update
-            $sets   = ['email=:email', 'handle=:handle'];
-            $params = [':email'=>$email, ':handle'=>$handle, ':id'=>$u['id']];
-
-            if (function_exists('table_has_column') && table_has_column(db(), 'users', 'phone')) {
-                $sets[] = 'phone=:phone';
-                $params[':phone'] = $phone;
-            }
-
-            if (function_exists('table_has_column') && table_has_column(db(), 'users', 'updated_at')) {
-                $sets[] = 'updated_at=NOW()';
-            }
-
-            $sql = 'UPDATE users SET '.implode(', ', $sets).' WHERE id=:id';
-            $upd = db()->prepare($sql);
-            $upd->execute($params);
-
-            $saved = true;
-            $u = current_user(); // refresh
-        }
+    // validate email format + uniqueness (except self)
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+      $errors[] = 'Please enter a valid email address.';
+    } else {
+      $st = db()->prepare('SELECT 1 FROM users WHERE lower(email)=lower(:e) AND id<>:me LIMIT 1');
+      $st->execute([':e'=>$email, ':me'=>$u['id']]);
+      if ($st->fetch()) $errors[] = 'That email is already in use.';
     }
 
-    if ($which === 'password') {
-        $cur = (string)($_POST['current_password'] ?? '');
-        $new = (string)($_POST['new_password'] ?? '');
-        $rep = (string)($_POST['repeat_password'] ?? '');
-
-        if ($new === '' || $rep === '') {
-            $errors[] = 'Please enter your new password twice.';
-        } elseif ($new !== $rep) {
-            $errors[] = 'New passwords do not match.';
-        } elseif (strlen($new) < 8) {
-            $errors[] = 'New password must be at least 8 characters.';
-        } else {
-            // verify current
-            if (!password_verify($cur, (string)($u['password_hash'] ?? ''))) {
-                $errors[] = 'Current password is incorrect.';
-            }
-        }
-
-        if (!$errors) {
-            $hash = password_hash($new, PASSWORD_DEFAULT);
-            $st = db()->prepare('UPDATE users SET password_hash=:h'.(function_exists('table_has_column') && table_has_column(db(),'users','updated_at')? ', updated_at=NOW()' : '').' WHERE id=:id');
-            $st->execute([':h'=>$hash, ':id'=>$u['id']]);
-            $saved = true;
-        }
+    // handle validate + uniqueness (except self)
+    if (!handle_is_valid($handle)) {
+      $errors[] = 'Username must be 3–20 characters (letters, numbers, underscores).';
+    } else {
+      $st = db()->prepare('SELECT 1 FROM users WHERE lower(handle)=lower(:h) AND id<>:me LIMIT 1');
+      $st->execute([':h'=>$handle, ':me'=>$u['id']]);
+      if ($st->fetch()) $errors[] = 'That username is taken.';
     }
+
+    if (!$errors) {
+      // Update handle/phone immediately
+      $sets   = ['handle=:h'];
+      $params = [':h'=>$handle, ':id'=>$u['id']];
+
+      if (function_exists('table_has_column') && table_has_column(db(),'users','phone')) {
+        $sets[] = 'phone=:p'; $params[':p'] = $phone;
+      }
+      if (function_exists('table_has_column') && table_has_column(db(),'users','updated_at')) {
+        $sets[] = 'updated_at=NOW()';
+      }
+      $sql = 'UPDATE users SET '.implode(', ',$sets).' WHERE id=:id';
+      db()->prepare($sql)->execute($params);
+
+      // If email changed, start verification to NEW email (do NOT switch yet)
+      if (strcasecmp($email, (string)($u['email'] ?? '')) !== 0) {
+        begin_email_change((int)$u['id'], $email);
+        $saved = true;
+        $u = current_user();
+      } else {
+        $saved = true;
+        $u = current_user();
+      }
+    }
+  }
+
+  if ($which === 'password') {
+    $cur = (string)($_POST['current_password'] ?? '');
+    $new = (string)($_POST['new_password'] ?? '');
+    $rep = (string)($_POST['repeat_password'] ?? '');
+
+    if ($new === '' || $rep === '') {
+      $errors[] = 'Please enter your new password twice.';
+    } elseif ($new !== $rep) {
+      $errors[] = 'New passwords do not match.';
+    } elseif (strlen($new) < 8) {
+      $errors[] = 'New password must be at least 8 characters.';
+    } elseif (!password_verify($cur, (string)($u['password_hash'] ?? ''))) {
+      $errors[] = 'Current password is incorrect.';
+    }
+
+    if (!$errors) {
+      $hash = password_hash($new, PASSWORD_DEFAULT);
+      $st = db()->prepare('UPDATE users SET password_hash=:h'.(function_exists('table_has_column') && table_has_column(db(),'users','updated_at')? ', updated_at=NOW()' : '').' WHERE id=:id');
+      $st->execute([':h'=>$hash, ':id'=>$u['id']]);
+      $saved = true;
+    }
+  }
 }
 
 $title = 'Account Settings';
@@ -137,6 +134,16 @@ ob_start(); ?>
     <div class="notice err"><?= e(implode("\n", $errors)) ?></div>
   <?php endif; ?>
 
+  <?php if (!empty($u['pending_email'])): ?>
+    <div class="notice" style="background:#3a2a06;color:#fde68a;border:1px solid #a16207">
+      Email change pending: <b><?= e($u['pending_email']) ?></b>. Check that inbox to confirm.
+      <form method="post" action="<?= e(asset('verify-email-change/resend')) ?>" style="display:inline">
+        <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+        <button class="btn secondary" style="height:28px;padding:0 10px;font-size:12px">Resend link</button>
+      </form>
+    </div>
+  <?php endif; ?>
+
   <form method="post" class="card" autocomplete="on">
     <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
     <input type="hidden" name="form" value="basics">
@@ -147,12 +154,13 @@ ob_start(); ?>
         <span class="inline-pill">@</span>
         <input type="text" name="handle" value="<?= e($u['handle'] ?? '') ?>" placeholder="yourname" style="max-width:240px">
       </div>
-      <div class="muted" style="margin-top:6px">3–20 chars, letters/numbers/underscore only. This changes your public URL.</div>
+      <div class="muted" style="margin-top:6px">3–20 chars, letters/numbers/underscore only. Changes your public URL.</div>
     </div>
 
     <div class="row">
       <label>Email</label>
       <input type="email" name="email" value="<?= e($u['email'] ?? '') ?>" placeholder="you@example.com">
+      <div class="muted" style="margin-top:6px">We’ll send a confirmation to the new email. Your current email stays active until you confirm.</div>
     </div>
 
     <?php if (function_exists('table_has_column') && table_has_column(db(),'users','phone')): ?>

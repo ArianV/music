@@ -226,6 +226,36 @@ if (!function_exists('smtp_send')) {
   }
 }
 
+// Start a "change email" verification flow (send link to the NEW email)
+if (!function_exists('begin_email_change')) {
+  function begin_email_change(int $user_id, string $newEmail): void {
+    $pdo   = db();
+    $token = bin2hex(random_bytes(32));
+    $hash  = hash('sha256', $token);
+    $exp   = (new DateTime('+24 hours'))->format('Y-m-d H:i:sP');
+
+    $st = $pdo->prepare('UPDATE users
+      SET pending_email=:e, pending_email_token_hash=:h, pending_email_expires=:x
+      WHERE id=:id');
+    $st->execute([':e'=>$newEmail, ':h'=>$hash, ':x'=>$exp, ':id'=>$user_id]);
+
+    $q = $pdo->prepare('SELECT handle FROM users WHERE id=:id');
+    $q->execute([':id'=>$user_id]);
+    $u = $q->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $link    = asset('verify-email-change?uid='.$user_id.'&token='.$token);
+    $subject = 'Confirm your new email for PlugBio';
+    $html = '
+      <div style="font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;max-width:560px">
+        <h2>Confirm your new email</h2>
+        <p>Hi '.e($u['handle'] ?? 'there').', click below to confirm your new email address.</p>
+        <p><a href="'.e($link).'" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Confirm email</a></p>
+        <p style="color:#6b7280;font-size:12px">If you didn’t request this change, you can ignore this email.</p>
+      </div>';
+    send_mail($newEmail, $subject, $html);
+  }
+}
+
 
 
 if (!function_exists('begin_email_verification')) {
