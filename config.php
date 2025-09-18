@@ -2,8 +2,8 @@
 // ====== config.php
 
 // Load rich email templates (safe if included multiple times)
-$__email_tpl = __DIR__ . '/email_templates.php';
-if (file_exists($__email_tpl)) { require_once $__email_tpl; }
+$__email_tpl = __DIR__ . 'lib/email_templates.php';
+if (file_exists($__email_tpl)) { require_once $__email_tpl; } else { error_log('[mail] email_templates.php NOT FOUND at '.$__email_tpl); }
 
 if (session_status() === PHP_SESSION_NONE) {
   // Safer cookie defaults
