@@ -28,10 +28,9 @@ route('/profile', 'routes/profile_edit.php');
 route('/settings', 'routes/account_settings.php');
 
 // Diagnostic Pages
-route('/diag/upload', 'routes/diag_upload.php');
 route('/diag/persist', 'routes/diag_persist.php');
 route('/health', 'routes/health.php');
-route('/email-test', 'routes/email_test.php');
+route('/email-diag', 'routes/email_diag.php');
 
 // Email senders
 route('/verify-email',   'routes/verify_email.php');

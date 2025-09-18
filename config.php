@@ -125,74 +125,107 @@ if (!function_exists('is_verified')) {
   }
 }
 
-// ---------- Email sending (SMTP via Brevo) ----------
+// ===== Email sending: Brevo API (preferred) or SMTP 587 STARTTLS =====
 if (!function_exists('send_mail')) {
-  function send_mail(string $to, string $subject, string $html, ?string $text=null): bool {
-    $host = getenv('SMTP_HOST');
-    if ($host) {
+  function send_mail(string $to, string $subject, string $html, ?string $text=null, array &$debug=null): bool {
+    $debug = $debug ?? [];
+
+    // 1) Brevo HTTP API if available (set BREVO_API_KEY in env)
+    if ($apiKey = getenv('BREVO_API_KEY')) {
+      $from = getenv('MAIL_FROM') ?: ('no-reply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+      $fromName = getenv('MAIL_FROM_NAME') ?: 'PlugBio';
+
+      $payload = [
+        'sender'      => ['email' => $from, 'name' => $fromName],
+        'to'          => [['email' => $to]],
+        'subject'     => $subject,
+        'htmlContent' => $html,
+        'textContent' => $text ?: strip_tags($html),
+      ];
+      $ch = curl_init('https://api.brevo.com/v3/smtp/email');
+      curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => ['api-key: '.$apiKey, 'Content-Type: application/json'],
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($payload),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 20,
+      ]);
+      $body = curl_exec($ch);
+      $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+      $err  = curl_error($ch);
+      curl_close($ch);
+
+      $debug[] = "BREVO_API status=$code body=$body err=$err";
+      return $code >= 200 && $code < 300;
+    }
+
+    // 2) SMTP 587 if configured
+    if ($host = getenv('SMTP_HOST')) {
       $port = (int)(getenv('SMTP_PORT') ?: 587);
       $user = getenv('SMTP_USER') ?: '';
       $pass = getenv('SMTP_PASS') ?: '';
       $from = getenv('MAIL_FROM') ?: ('no-reply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
       $fromName = getenv('MAIL_FROM_NAME') ?: 'PlugBio';
-      return smtp_send($host, $port, $user, $pass, $from, $fromName, $to, $subject, $html, $text);
+      return smtp_send($host,$port,$user,$pass,$from,$fromName,$to,$subject,$html,$text,$debug);
     }
 
-    // (optional) your previous SendGrid/PHP mail fallback here
+    $debug[] = 'No mail transport configured (set BREVO_API_KEY or SMTP_* env vars).';
     return false;
   }
 }
 
 if (!function_exists('smtp_send')) {
-  function smtp_send($host,$port,$user,$pass,$from,$fromName,$to,$subject,$html,$text=null): bool {
-    $timeout = 15;
-    $fp = @stream_socket_client("tcp://{$host}:{$port}", $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT);
-    if (!$fp) return false;
+  function smtp_send($host,$port,$user,$pass,$from,$fromName,$to,$subject,$html,$text=null,&$debug=[]): bool {
+    $debug[] = 'SMTP via '.$host.':'.$port.' (STARTTLS)';
+    if (!extension_loaded('openssl')) {
+      $debug[] = 'openssl extension missing (TLS required for port 587)';
+      return false;
+    }
+    $ip = @gethostbyname($host);
+    $debug[] = 'DNS: '.$host.' -> '.$ip;
 
-    $readAll = function() use ($fp) {
-      $buf = ''; $line = '';
-      while (($line = fgets($fp, 515)) !== false) { $buf .= $line; if (preg_match('/^\d{3} /',$line)) break; }
-      return $buf;
-    };
-    $expect = function($code) use ($readAll) { $resp = $readAll(); return (int)substr($resp,0,3) === $code; };
-    $w = function($s) use ($fp){ fwrite($fp, $s."\r\n"); };
+    $fp = @stream_socket_client("tcp://{$host}:{$port}", $errno, $errstr, 20, STREAM_CLIENT_CONNECT);
+    if (!$fp) { $debug[] = "connect error: $errno $errstr"; return false; }
 
-    if (!$expect(220)) { fclose($fp); return false; }
-    $w('EHLO plugbio.local');          if (!$expect(250)) { fclose($fp); return false; }
-    $w('STARTTLS');                    if (!$expect(220)) { fclose($fp); return false; }
-    if (!stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) { fclose($fp); return false; }
-    $w('EHLO plugbio.local');          if (!$expect(250)) { fclose($fp); return false; }
+    $read = function() use ($fp){ $buf=''; while(($ln=fgets($fp, 515))!==false){ $buf.=$ln; if(preg_match('/^\d{3} /',$ln)) break; } return $buf; };
+    $want = function($code) use (&$debug,$read){ $resp=$read(); $debug[]="<< ".trim($resp); return (int)substr($resp,0,3)===$code; };
+    $say  = function($s) use (&$debug,$fp){ $debug[]=">> $s"; fwrite($fp, $s."\r\n"); };
 
-    // AUTH LOGIN
-    $w('AUTH LOGIN');                  if (!$expect(334)) { fclose($fp); return false; }
-    $w(base64_encode($user));          if (!$expect(334)) { fclose($fp); return false; }
-    $w(base64_encode($pass));          if (!$expect(235)) { fclose($fp); return false; }
+    if (!$want(220)) { fclose($fp); return false; }
+    $say('EHLO plugbio.local');         if (!$want(250)) { fclose($fp); return false; }
+    $say('STARTTLS');                   if (!$want(220)) { fclose($fp); return false; }
+    if (!stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) { $debug[]='TLS handshake failed'; fclose($fp); return false; }
+    $say('EHLO plugbio.local');         if (!$want(250)) { fclose($fp); return false; }
 
-    $w("MAIL FROM:<{$from}>");         if (!$expect(250)) { fclose($fp); return false; }
-    $w("RCPT TO:<{$to}>");             if (!$expect(250)) { fclose($fp); return false; }
-    $w('DATA');                        if (!$expect(354)) { fclose($fp); return false; }
+    $say('AUTH LOGIN');                 if (!$want(334)) { fclose($fp); return false; }
+    $say(base64_encode($user));         if (!$want(334)) { fclose($fp); return false; }
+    $say(base64_encode($pass));         if (!$want(235)) { fclose($fp); return false; }
+
+    $say("MAIL FROM:<{$from}>");        if (!$want(250)) { fclose($fp); return false; }
+    $say("RCPT TO:<{$to}>");            if (!$want(250)) { fclose($fp); return false; }
+    $say('DATA');                       if (!$want(354)) { fclose($fp); return false; }
 
     $boundary = 'b'.bin2hex(random_bytes(8));
-    $headers = [];
-    $headers[] = "From: {$fromName} <{$from}>";
-    $headers[] = "To: <{$to}>";
-    $headers[] = "Subject: ".mb_encode_mimeheader($subject, 'UTF-8');
-    $headers[] = "MIME-Version: 1.0";
-    $headers[] = "Content-Type: multipart/alternative; boundary=\"{$boundary}\"";
-
+    $headers = [
+      "From: {$fromName} <{$from}>",
+      "To: <{$to}>",
+      "Subject: ".mb_encode_mimeheader($subject,'UTF-8'),
+      "MIME-Version: 1.0",
+      "Content-Type: multipart/alternative; boundary=\"{$boundary}\""
+    ];
     $plain = $text ?: strip_tags($html);
-    $msg  = implode("\r\n", $headers)."\r\n\r\n";
+    $msg  = implode("\r\n",$headers)."\r\n\r\n";
     $msg .= "--{$boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n{$plain}\r\n";
     $msg .= "--{$boundary}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n{$html}\r\n";
     $msg .= "--{$boundary}--\r\n.\r\n";
-    // dot-stuffing safety
-    $msg = str_replace("\n.", "\n..", $msg);
+    $msg = str_replace("\n.", "\n..", $msg); // dot-stuffing
 
-    fwrite($fp, $msg);                 if (!$expect(250)) { fclose($fp); return false; }
-    $w('QUIT'); fclose($fp);
+    fwrite($fp,$msg);                   if (!$want(250)) { fclose($fp); return false; }
+    $say('QUIT'); fclose($fp);
     return true;
   }
 }
+
 
 
 if (!function_exists('begin_email_verification')) {
