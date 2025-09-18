@@ -22,6 +22,15 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
   <title><?= e($title) ?></title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="<?= e(asset('assets/styles.css?v4')) ?>">
+
+  <!-- Favicons -->
+  <link rel="icon" type="image/svg+xml" href="<?= e(asset('assets/favicon.svg')) ?>">
+  <link rel="icon" type="image/png" sizes="32x32" href="<?= e(asset('assets/favicon-32.png')) ?>">
+  <link rel="icon" type="image/png" sizes="16x16" href="<?= e(asset('assets/favicon-16.png')) ?>">
+  <link rel="apple-touch-icon" sizes="180x180" href="<?= e(asset('assets/apple-touch-icon.png')) ?>">
+  <link rel="mask-icon" href="<?= e(asset('assets/safari-pinned-tab.svg')) ?>" color="#22c55e">
+  <meta name="theme-color" content="#0b0b0c">
+
   <style>
     /* Navbar avatar menu */
     .nav{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #1f2430;background:#0b0b0c;position:sticky;top:0;z-index:50}
