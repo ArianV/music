@@ -38,14 +38,55 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
     .menu a{display:flex;align-items:center;gap:8px;color:#e5e7eb;text-decoration:none;padding:10px 12px;border-radius:10px}
     .menu a:hover{background:#151925}
     .menu hr{border:0;border-top:1px solid #1f2430;margin:6px}
-    .nav-user{position:relative}
+    .nav-user{position:relative;padding: 5px 6px 0px 16px;}
     .btn{display:inline-flex;align-items:center;gap:8px;background:#1f2937;color:#e5e7eb;border:1px solid #2a3344;border-radius:10px;padding:8px 12px;text-decoration:none}
     .btn:hover{background:#232e44}
     .page{max-width:980px;margin:24px auto;padding:0 16px}
+
+    /* === ambient background (prototype) === */
+.fx-ambient{position:fixed; inset:-12% -12% -12% -12%; z-index:0; pointer-events:none;}
+.fx-ambient .blob{
+  position:absolute; width:48vw; height:48vw; border-radius:999px;
+  filter: blur(60px); opacity:.12; mix-blend-mode:screen;
+  background: radial-gradient(35% 35% at 50% 50%, currentColor 0%, transparent 60%);
+}
+/* brand-ish hues */
+.fx-ambient .b1{ color:#22c55e; left:8%;  top:0%;   animation:float1 28s ease-in-out infinite; }
+.fx-ambient .b2{ color:#60a5fa; right:6%; top:10%;  animation:float2 36s ease-in-out infinite; }
+.fx-ambient .b3{ color:#a855f7; left:40%; bottom:0; animation:float3 42s ease-in-out infinite; }
+
+/* very subtle grain to make it feel alive */
+.fx-ambient .grain{
+  position:absolute; inset:-50%;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/><feComponentTransfer><feFuncA type='table' tableValues='0 0 .9 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/></feComponentTransfer></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  opacity:.035; mix-blend-mode:soft-light; animation:grain 9s steps(10) infinite;
+}
+/* keep motion tasteful */
+@keyframes float1 { 0%{transform:translate3d(0,0,0)} 50%{transform:translate3d(7vw,6vh,0) scale(1.05)} 100%{transform:translate3d(0,0,0)} }
+@keyframes float2 { 0%{transform:translate3d(0,0,0)} 50%{transform:translate3d(-6vw,5vh,0) scale(1.06)} 100%{transform:translate3d(0,0,0)} }
+@keyframes float3 { 0%{transform:translate3d(0,0,0)} 50%{transform:translate3d(4vw,-6vh,0) scale(1.04)} 100%{transform:translate3d(0,0,0)} }
+@keyframes grain  { 0%{transform:translate(0,0)} 25%{transform:translate(-1%,1%)} 50%{transform:translate(1%,-1%)} 75%{transform:translate(-1%,-1%)} 100%{transform:translate(0,0)} }
+
+/* ensure your main content sits above */
+.site-main{position:relative; z-index:1}
+
+/* accessibility */
+@media (prefers-reduced-motion: reduce){
+  .fx-ambient .blob,.fx-ambient .grain{animation:none}
+}
   </style>
   <?= $head ?>
 </head>
 <body>
+  <?php if (getenv('FX_BG') === '1'): ?>
+  <div class="fx-ambient" aria-hidden="true">
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+    <div class="blob b3"></div>
+    <div class="grain"></div>
+  </div>
+<?php endif; ?>
+
   <header class="nav">
     <a class="brand" href="<?= e(asset($me ? 'dashboard' : '')) ?>">
       <!-- Inline PlugBio mark (teal) -->
@@ -83,9 +124,9 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
     </div>
   </header>
 
-  <main class="page">
-    <?= $content ?>
-  </main>
+<main class="site-main">
+  <?= $content ?>
+</main>
 
   <script>
   (function(){
