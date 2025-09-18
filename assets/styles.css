@@ -218,3 +218,14 @@ input[type='text'],input[type='email'],input[type='password'],input[type='file']
   .link-row{ grid-template-columns: 1fr auto; }
   .link-row .svc{ grid-column: 1 / -1; } /* chip spans full width on its own row */
 }
+
+/* match input look */
+select {
+  width: 100%;
+  box-sizing: border-box;
+  background: #0f1217;
+  border: 1px solid #263142;
+  color: #e5e7eb;
+  border-radius: 8px;
+  padding: 10px;
+}

@@ -77,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $artistInput  = trim($_POST['artist'] ?? '');
   $urls         = $_POST['links_url']   ?? [];
   $auto_img_url = trim($_POST['auto_image_url'] ?? '');
-  $published    = isset($_POST['published']) ? 1 : 0;
+  $published = (($_POST['published'] ?? '0') === '1') ? 1 : 0;
 
   if ($title === '') { http_response_code(422); exit('Title is required'); }
 
@@ -235,9 +235,14 @@ ob_start(); ?>
     </div>
 
     <div class="form-row" style="align-items:center;padding-left:0">
-      <label class="small" style="display:inline-flex;align-items:center;gap:8px">
-        <input type="checkbox" name="published" value="1"> Published
-      </label>
+      div class="row">
+       <label>Status</label>
+       <select name="published" aria-label="Page status">
+         <option value="0" <?= (($_POST['published'] ?? '0') !== '1') ? 'selected' : '' ?>>Draft (private)</option>
+         <option value="1" <?= (($_POST['published'] ?? '0') === '1') ? 'selected' : '' ?>>Published</option>
+       </select>
+       <div class="muted" style="margin-top:6px">Draft pages are private and can’t be viewed until you publish.</div>
+      /div>
     </div>
 
     <div class="form-row" style="padding-left:0">
