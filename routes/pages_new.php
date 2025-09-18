@@ -146,7 +146,6 @@ $head = <<<HTML
 .link-row .remove{background:#232938;border:1px solid #2a3344;color:#a1a1aa;padding:8px 10px;border-radius:10px}
 .add-link{margin-top:8px;background:#1f2937;border:1px solid #2a3344;color:#e5e7eb;padding:10px 12px;border-radius:10px}
 .small{font-size:.9rem;color:#a1a1aa}
-.but-row{display: flex;align-items: center;gap: 10px;margin: 8px 0;}
 </style>
 <script>
 (function(){
@@ -222,9 +221,9 @@ ob_start(); ?>
     <div class="links-wrap">
       <label class="small" style="display:block;margin-bottom:6px">Links</label>
       <div id="links-list"></div>
-        <div class="but-row">
-          <button type="button" id="add-link" class="add-link">+ Add link</button>
-          <div class="small" style="margin-top:6px">Just paste URLs — we’ll detect the service automatically.</div>
+        <div class="btn-row">
+          <button type="button" class="btn" id="add-link">+ Add link</button>
+          <div class="hint" id="links-hint">Just paste URLs — we’ll detect the service automatically.</div>
         </div>
     </div>
 

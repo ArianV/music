@@ -180,3 +180,22 @@ input[type='text'],input[type='email'],input[type='password'],input[type='file']
 
 /* Fallback */
 .btn-default { background:#2563eb; color:#fff; }
+
+/* "Add link" row */
+.btn-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-top:8px;
+  flex-wrap:wrap;           /* lets the hint wrap under on small screens */
+}
+.btn-row .btn{
+  height:32px;
+  padding:0 10px;
+  font-size:13px;
+  border-radius:8px;
+}
+.btn-row .hint{
+  color:#9ca3af;
+  font-size:12px;
+}
