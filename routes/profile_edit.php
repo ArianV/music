@@ -268,7 +268,7 @@ ob_start(); ?>
     </div>
 
     <div class="row" style="margin-top:10px">
-      <button type="submit" class="btn">Save profile</button>
+      <button type="submit" style="background-color: #7ef1c7 !important;" class="btn">Save profile</button>
     </div>
   </form>
 </div>

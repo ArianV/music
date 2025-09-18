@@ -91,7 +91,7 @@ ob_start(); ?>
       </div>
 
       <div class="actions">
-        <button type="submit" class="btn">Log in</button>
+        <button type="submit" style="background-color: #7ef1c7 !important;" class="btn">Log in</button>
         <a class="btn-secondary" href="<?= e(asset('register')) ?>">Sign up</a>
       </div>
     </form>
