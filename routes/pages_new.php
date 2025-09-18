@@ -223,8 +223,8 @@ ob_start(); ?>
       <label class="small" style="display:block;margin-bottom:6px">Links</label>
       <div id="links-list"></div>
         <div class="but-row">
-        <button type="button" id="add-link" class="add-link">+ Add link</button>
-        <div class="small" style="margin-top:6px">Just paste URLs — we’ll detect the service automatically.</div>
+          <button type="button" id="add-link" class="add-link">+ Add link</button>
+          <div class="small" style="margin-top:6px">Just paste URLs — we’ll detect the service automatically.</div>
         </div>
     </div>
 
