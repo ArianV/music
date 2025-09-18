@@ -223,12 +223,12 @@ ob_start(); ?>
         <input type="text" name="display_name" value="<?= e($display) ?>" placeholder="Lil Foaf" required>
       </div>
       <div class="row">
-        <label>Handle</label>
+        <label>Handle <span class="muted">(username)</span></label>
         <div style="display:flex;gap:8px;align-items:center">
-          <span class="muted">@</span>
-          <input type="text" name="handle" value="<?= e($handle) ?>" placeholder="ex. lilfoaf">
+          <span class="inline-pill">@</span>
+          <input type="text" value="<?= e($user['handle'] ?? '') ?>" readonly style="max-width:240px;opacity:.8">
+          <a href="<?= e(asset('settings')) ?>" class="muted" style="text-decoration:underline">Change username</a>
         </div>
-        <div class="muted">Your public URL: <?= e(asset('u/'.($handle?:'me'))) ?></div>
       </div>
     </div>
 
