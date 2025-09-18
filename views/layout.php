@@ -140,10 +140,6 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
       <?= $content ?>
     <?php if (!$full_bleed): ?></div><?php endif; ?>
   </main>
-    
-  <main class="site-main">
-    <?= $content ?>
-  </main>
 
   <script>
   (function(){
