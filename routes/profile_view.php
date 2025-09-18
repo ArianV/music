@@ -104,7 +104,7 @@ $head = <<<CSS
 /* info card with bio + socials */
 .info{background:#111318;border:1px solid #1f2430;border-radius:12px;padding:14px;margin:8px 0 18px}
 .bio{margin:0 0 10px;white-space:pre-line;color:#d1d5db}
-.socials{display:flex;flex-wrap:wrap;gap:10px}
+.socials{display:flex;flex-wrap:wrap;gap:10px;font-size: small;}
 .sbtn{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:999px;border:1px solid #253041;background:#0f1217;color:#e5e7eb;text-decoration:none}
 .sbtn:hover{background:#151a25}
 .sicon{width:18px;height:18px}
@@ -132,23 +132,24 @@ CSS;
 
 ob_start(); ?>
 <div class="profile">
-  <div class="header">
-    <img class="pfp" src="<?= e($avatar) ?>" alt="">
-    <div>
-      <h1 style="margin:0 0 4px"><?= e($display) ?></h1>
-      <div class="mono">@<?= e($owner['handle'] ?? '') ?></div>
-    </div>
-    <div style="flex:1"></div>
-    <?php if ($isOwner): ?>
-      <span class="pill <?= $isPublic ? 'pill-public':'pill-private' ?>" style="margin-right:10px">
-        <?= $isPublic ? 'Public' : 'Private' ?>
-      </span>
-      <a class="btn" href="<?= e(asset('profile')) ?>">Edit profile</a>
-    <?php endif; ?>
-  </div>
-
   <?php if (!empty($owner['bio']) || $socials): ?>
     <div class="info">
+    
+      <div class="header">
+        <img class="pfp" src="<?= e($avatar) ?>" alt="">
+        <div>
+          <h1 style="margin:0 0 4px"><?= e($display) ?></h1>
+          <div class="mono">@<?= e($owner['handle'] ?? '') ?></div>
+        </div>
+        <div style="flex:1"></div>
+        <?php if ($isOwner): ?>
+          <span class="pill <?= $isPublic ? 'pill-public':'pill-private' ?>" style="margin-right:10px">
+            <?= $isPublic ? 'Public' : 'Private' ?>
+          </span>
+          <a class="btn" href="<?= e(asset('profile')) ?>">Edit profile</a>
+        <?php endif; ?>
+      </div>
+
       <?php if (!empty($owner['bio'])): ?>
         <p class="bio"><?= nl2br(e($owner['bio'])) ?></p>
       <?php endif; ?>
