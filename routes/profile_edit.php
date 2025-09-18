@@ -226,7 +226,7 @@ ob_start(); ?>
         <label>Handle <span class="muted">(username)</span></label>
         <div style="display:flex;gap:8px;align-items:center">
           <span class="inline-pill">@</span>
-          <input type="text" value="<?= e($user['handle'] ?? '') ?>" readonly style="max-width:240px;opacity:.8">
+          <input type="text" value="<?= e($user['handle'] ?? '') ?>" readonly style="max-width:240px;opacity:.8;cursor: not-allowed;">
           <a href="<?= e(asset('settings')) ?>" class="muted" style="text-decoration:underline">Change username</a>
         </div>
       </div>

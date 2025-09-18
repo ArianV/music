@@ -31,6 +31,11 @@ route('/settings', 'routes/account_settings.php');
 route('/diag/upload', 'routes/diag_upload.php');
 route('/diag/persist', 'routes/diag_persist.php');
 route('/health', 'routes/health.php');
+route('/email-test', 'routes/email_test.php');
+
+// Email senders
+route('/verify-email',   'routes/verify_email.php');
+route('/verify-resend',  'routes/verify_resend.php');
 
 // ---- pages (slugs or numeric ids) — SPECIFIC FIRST
 route_regex('#^/pages/([^/]+)/edit/?$#', 'routes/pages_edit.php',   ['page_id' => 1]);

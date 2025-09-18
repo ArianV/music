@@ -131,6 +131,20 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
     </div>
   </header>
 
+  
+  <?php if ($u = current_user()): ?>
+    <?php if (!is_verified($u)): ?>
+      <div style="background:#3a2a06;border:1px solid #a16207;color:#fde68a;padding:10px 14px;margin:10px auto;border-radius:10px;max-width:1100px">
+        Please verify your email to unlock all features.
+        <form method="post" action="<?= e(asset('verify-resend')) ?>" style="display:inline;margin-left:10px">
+          <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+          <button class="btn secondary" style="height:28px;padding:0 10px;font-size:12px">Resend link</button>
+        </form>
+      </div>
+    <?php endif; ?>
+  <?php endif; ?>
+
+
   <?php if (getenv('FX_BG') === '1'): ?>
     <div class="fx-ambient" aria-hidden="true">
       <div class="blob b1"></div>

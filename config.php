@@ -117,6 +117,114 @@ if (!function_exists('require_auth')) {
   }
 }
 
+// ---------- Email + verification helpers ----------
+
+if (!function_exists('is_verified')) {
+  function is_verified(?array $u): bool {
+    return !empty($u['email_verified_at']);
+  }
+}
+
+// ---------- Email sending (SMTP via Brevo) ----------
+if (!function_exists('send_mail')) {
+  function send_mail(string $to, string $subject, string $html, ?string $text=null): bool {
+    $host = getenv('SMTP_HOST');
+    if ($host) {
+      $port = (int)(getenv('SMTP_PORT') ?: 587);
+      $user = getenv('SMTP_USER') ?: '';
+      $pass = getenv('SMTP_PASS') ?: '';
+      $from = getenv('MAIL_FROM') ?: ('no-reply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
+      $fromName = getenv('MAIL_FROM_NAME') ?: 'PlugBio';
+      return smtp_send($host, $port, $user, $pass, $from, $fromName, $to, $subject, $html, $text);
+    }
+
+    // (optional) your previous SendGrid/PHP mail fallback here
+    return false;
+  }
+}
+
+if (!function_exists('smtp_send')) {
+  function smtp_send($host,$port,$user,$pass,$from,$fromName,$to,$subject,$html,$text=null): bool {
+    $timeout = 15;
+    $fp = @stream_socket_client("tcp://{$host}:{$port}", $errno, $errstr, $timeout, STREAM_CLIENT_CONNECT);
+    if (!$fp) return false;
+
+    $readAll = function() use ($fp) {
+      $buf = ''; $line = '';
+      while (($line = fgets($fp, 515)) !== false) { $buf .= $line; if (preg_match('/^\d{3} /',$line)) break; }
+      return $buf;
+    };
+    $expect = function($code) use ($readAll) { $resp = $readAll(); return (int)substr($resp,0,3) === $code; };
+    $w = function($s) use ($fp){ fwrite($fp, $s."\r\n"); };
+
+    if (!$expect(220)) { fclose($fp); return false; }
+    $w('EHLO plugbio.local');          if (!$expect(250)) { fclose($fp); return false; }
+    $w('STARTTLS');                    if (!$expect(220)) { fclose($fp); return false; }
+    if (!stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) { fclose($fp); return false; }
+    $w('EHLO plugbio.local');          if (!$expect(250)) { fclose($fp); return false; }
+
+    // AUTH LOGIN
+    $w('AUTH LOGIN');                  if (!$expect(334)) { fclose($fp); return false; }
+    $w(base64_encode($user));          if (!$expect(334)) { fclose($fp); return false; }
+    $w(base64_encode($pass));          if (!$expect(235)) { fclose($fp); return false; }
+
+    $w("MAIL FROM:<{$from}>");         if (!$expect(250)) { fclose($fp); return false; }
+    $w("RCPT TO:<{$to}>");             if (!$expect(250)) { fclose($fp); return false; }
+    $w('DATA');                        if (!$expect(354)) { fclose($fp); return false; }
+
+    $boundary = 'b'.bin2hex(random_bytes(8));
+    $headers = [];
+    $headers[] = "From: {$fromName} <{$from}>";
+    $headers[] = "To: <{$to}>";
+    $headers[] = "Subject: ".mb_encode_mimeheader($subject, 'UTF-8');
+    $headers[] = "MIME-Version: 1.0";
+    $headers[] = "Content-Type: multipart/alternative; boundary=\"{$boundary}\"";
+
+    $plain = $text ?: strip_tags($html);
+    $msg  = implode("\r\n", $headers)."\r\n\r\n";
+    $msg .= "--{$boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n{$plain}\r\n";
+    $msg .= "--{$boundary}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n{$html}\r\n";
+    $msg .= "--{$boundary}--\r\n.\r\n";
+    // dot-stuffing safety
+    $msg = str_replace("\n.", "\n..", $msg);
+
+    fwrite($fp, $msg);                 if (!$expect(250)) { fclose($fp); return false; }
+    $w('QUIT'); fclose($fp);
+    return true;
+  }
+}
+
+
+if (!function_exists('begin_email_verification')) {
+  function begin_email_verification(int $user_id): void {
+    $pdo = db();
+    // Create token, store hash & expiry (24h)
+    $token = bin2hex(random_bytes(32));
+    $hash  = hash('sha256', $token);
+    $exp   = (new DateTime('+24 hours'))->format('Y-m-d H:i:sP');
+
+    $st = $pdo->prepare('UPDATE users SET verify_token_hash=:h, verify_token_expires=:e WHERE id=:id');
+    $st->execute([':h'=>$hash, ':e'=>$exp, ':id'=>$user_id]);
+
+    // Compose verification email
+    $st = $pdo->prepare('SELECT email, handle FROM users WHERE id=:id');
+    $st->execute([':id'=>$user_id]);
+    $u = $st->fetch() ?: [];
+
+    $link = asset('verify-email?uid='.$user_id.'&token='.$token);
+    $subject = 'Verify your email for PlugBio';
+    $html = '
+      <div style="font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;max-width:560px">
+        <h2>Verify your email</h2>
+        <p>Hey '.e($u['handle'] ?? 'there').', click the button below to verify your email.</p>
+        <p><a href="'.e($link).'" style="display:inline-block;background:#16a34a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Verify email</a></p>
+        <p style="color:#6b7280;font-size:12px">If you didn’t create an account, feel free to ignore this.</p>
+      </div>';
+    send_mail($u['email'] ?? '', $subject, $html);
+  }
+}
+
+
 // Uploads 
 $uploadDirEnv = getenv('UPLOAD_DIR');
 if (!defined('UPLOAD_DIR')) define('UPLOAD_DIR', $uploadDirEnv ?: (__DIR__ . '/uploads'));

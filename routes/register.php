@@ -81,6 +81,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $st->execute($params);
     $id = (int)($st->fetchColumn() ?: 0);
 
+    begin_email_verification((int)$id);
+
     if ($id > 0) {
       $_SESSION['user_id'] = $id;
       header('Location: ' . asset('dashboard'));
