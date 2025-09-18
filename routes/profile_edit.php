@@ -188,12 +188,6 @@ ob_start(); ?>
 <div class="card" style="max-width:900px;margin:0 auto">
   <h1 style="margin-top:0">Edit profile</h1>
 
-  <div style="margin:6px 0 14px">
-    <span class="pill <?= $public ? 'pill-public' : 'pill-private' ?>">
-      <?= $public ? 'Public' : 'Private' ?>
-    </span>
-  </div>
-
   <?php if ($notice): ?><div class="notice ok"><?= e($notice) ?></div><?php endif; ?>
   <?php if ($upload_err): ?><div class="notice err"><?= e($upload_err) ?></div><?php endif; ?>
 
@@ -209,14 +203,18 @@ ob_start(); ?>
         <div class="muted">PNG/JPG/WEBP. We’ll resize on the client.</div>
       </div>
       <div class="row">
-      <div style="height: 90px;"></div>
+      <div style="height: 48px;"></div>
+        <div style="margin:6px 0 14px">
+          <span class="pill <?= $public ? 'pill-public' : 'pill-private' ?>">
+            <?= $public ? 'Public' : 'Private' ?>
+          </span>
+        </div>
         <label>Profile visibility</label>
         <select name="profile_public">
           <option value="">— Keep current (<?= $public?'Public':'Private' ?>) —</option>
           <option value="1" <?= $public ? 'selected' : '' ?>>Public</option>
           <option value="0" <?= !$public ? 'selected' : '' ?>>Private</option>
         </select>
-        <div class="muted">Private profiles are hidden unless you share a page link directly.</div>
       </div>
     </div>
 
