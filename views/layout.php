@@ -67,6 +67,13 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
 @keyframes float3 { 0%{transform:translate3d(0,0,0)} 50%{transform:translate3d(4vw,-6vh,0) scale(1.04)} 100%{transform:translate3d(0,0,0)} }
 @keyframes grain  { 0%{transform:translate(0,0)} 25%{transform:translate(-1%,1%)} 50%{transform:translate(1%,-1%)} 75%{transform:translate(-1%,-1%)} 100%{transform:translate(0,0)} }
 
+  /* Centered page container (same look as before) */
+  .wrap{
+    max-width: 1100px;
+    margin: 24px auto;
+    padding: 0 16px;
+  }
+
 /* ensure your main content sits above */
 .site-main{position:relative; z-index:1}
 
@@ -78,15 +85,6 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
   <?= $head ?>
 </head>
 <body>
-  <?php if (getenv('FX_BG') === '1'): ?>
-  <div class="fx-ambient" aria-hidden="true">
-    <div class="blob b1"></div>
-    <div class="blob b2"></div>
-    <div class="blob b3"></div>
-    <div class="grain"></div>
-  </div>
-<?php endif; ?>
-
   <header class="nav">
     <a class="brand" href="<?= e(asset($me ? 'dashboard' : '')) ?>">
       <!-- Inline PlugBio mark (teal) -->
@@ -124,9 +122,28 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
     </div>
   </header>
 
-<main class="site-main">
-  <?= $content ?>
-</main>
+  <?php if (getenv('FX_BG') === '1'): ?>
+    <div class="fx-ambient" aria-hidden="true">
+      <div class="blob b1"></div>
+      <div class="blob b2"></div>
+      <div class="blob b3"></div>
+      <div class="grain"></div>
+    </div>
+  <?php endif; ?>
+  
+  <?php
+    // allow pages to opt-out of the wrapper if they really need full-bleed
+    $full_bleed = $full_bleed ?? false;
+  ?>
+  <main class="site-main">
+    <?php if (!$full_bleed): ?><div class="wrap"><?php endif; ?>
+      <?= $content ?>
+    <?php if (!$full_bleed): ?></div><?php endif; ?>
+  </main>
+    
+  <main class="site-main">
+    <?= $content ?>
+  </main>
 
   <script>
   (function(){
