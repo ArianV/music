@@ -250,7 +250,7 @@ ob_start(); ?>
   </a>
   <h1 style="margin:0">Edit page</h1>
   <div style="flex:1"></div>
-  <button type="button" class="btn" onclick="navigator.clipboard?.writeText('<?= e($publicUrl) ?>')?.then(()=>this.textContent='Copied!')">Copy public link</button>
+  <button type="button" class="btn" onclick="navigator.clipboard?.writeText('<?= e($publicUrl) ?>')?.then(()=>this.textContent='Copied!')">Copy link</button>
 </div>
 
 <div class="card">

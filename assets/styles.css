@@ -98,7 +98,7 @@ input[type='text'],input[type='email'],input[type='password'],input[type='file']
 .pill.draft     { background:#261936; border-color:#a855f7; color:#e9d5ff; }
 
 /* label + pill on one line */
-.status-row { display:flex; align-items:center; gap:10px; justify-content:space-between; }
+.status-row { display:flex; align-items:center; gap:10px; justify-content:space-between; padding-bottom: 15px; }
 @media (max-width:520px){ .status-row{ align-items:flex-end; } }
 
 /* Disabled copy button hint */
