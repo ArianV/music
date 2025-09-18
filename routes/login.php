@@ -1,99 +1,101 @@
 <?php
 // routes/login.php
 require_once __DIR__ . '/../config.php';
-csrf_check();
 
-$pdo = db();
+if (current_user()) {
+  header('Location: ' . asset('dashboard'));
+  exit;
+}
 
-$errors = [];
+$err = null;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  $login    = trim($_POST['login'] ?? '');   // email or handle/username
-  $password = (string)($_POST['password'] ?? '');
+  csrf_check();
+  $id = trim($_POST['id'] ?? '');
+  $pw = (string)($_POST['password'] ?? '');
 
-  if ($login === '' || $password === '') {
-    $errors[] = 'Email/username and password are required.';
+  if ($id === '' || $pw === '') {
+    $err = 'Please enter your email/username and password.';
   } else {
-    // Build WHERE that matches any available identity column
-    $whereParts = [];
-    $params = [':v' => strtolower($login)];
+    // login by email OR handle OR username (if present)
+    $st = db()->prepare("
+      SELECT *
+      FROM users
+      WHERE lower(email)  = lower(:id)
+         OR lower(handle) = lower(:id)
+         OR lower(coalesce(username, '')) = lower(:id)
+      LIMIT 1
+    ");
+    $st->execute([':id' => $id]);
+    $u = $st->fetch(PDO::FETCH_ASSOC);
 
-    if (table_has_column($pdo, 'users', 'email'))    $whereParts[] = 'lower(email) = :v';
-    if (table_has_column($pdo, 'users', 'handle'))   $whereParts[] = 'lower(handle) = :v';
-    if (table_has_column($pdo, 'users', 'username')) $whereParts[] = 'lower(username) = :v';
-
-    if (!$whereParts) {
-      $errors[] = 'Login is not configured (no email/handle/username column).';
-    } else {
-      // Determine which password column we have
-      $pwdCol = null;
-      if (table_has_column($pdo, 'users', 'password_hash')) $pwdCol = 'password_hash';
-      elseif (table_has_column($pdo, 'users', 'password'))  $pwdCol = 'password';
-
-      if (!$pwdCol) {
-        $errors[] = 'Login is not configured (no password column).';
-      } else {
-        $cols = "id, " . $pwdCol . " AS pwd";
-        // grab a couple of optional fields for session niceties
-        if (table_has_column($pdo, 'users', 'display_name')) $cols .= ", display_name";
-        if (table_has_column($pdo, 'users', 'handle'))       $cols .= ", handle";
-
-        $sql = "SELECT $cols FROM users WHERE (" . implode(' OR ', $whereParts) . ") LIMIT 1";
-        $st  = $pdo->prepare($sql);
-        $st->execute($params);
-        $u = $st->fetch();
-
-        if (!$u) {
-          $errors[] = 'Invalid credentials.';
-        } else {
-          $ok = false;
-          // If stored as bcrypt/argon/etc.
-          if (strlen($u['pwd'] ?? '') > 0 && preg_match('/^\$2[ayb]\$|\$argon2i|\$argon2id/', $u['pwd'])) {
-            $ok = password_verify($password, $u['pwd']);
-          } else {
-            // fallback: plain (not recommended)
-            $ok = hash_equals((string)$u['pwd'], $password);
-          }
-
-          if ($ok) {
-            $_SESSION['user_id'] = (int)$u['id'];
-            header('Location: ' . BASE_URL . 'dashboard');
-            exit;
-          } else {
-            $errors[] = 'Invalid credentials.';
-          }
-        }
-      }
+    if ($u && password_verify($pw, (string)($u['password_hash'] ?? ''))) {
+      $_SESSION['user_id'] = (int)$u['id'];
+      header('Location: ' . asset('dashboard'));
+      exit;
     }
+    $err = 'Invalid credentials.';
   }
 }
 
-// ----- view -----
 $title = 'Log in';
+$head = <<<CSS
+<style>
+.auth-wrap { max-width: 480px; margin: 64px auto; padding: 0 16px; }
+.auth-card { background:#111318; border:1px solid #1f2430; border-radius:14px; padding:20px; }
+.auth-card h1 { margin:0 0 12px; }
+.auth-card .row{ margin-bottom:12px; }
+.auth-card label{ display:block; font-size:14px; color:#a1a1aa; margin-bottom:6px; }
+.auth-card input[type="text"], .auth-card input[type="email"], .auth-card input[type="password"]{
+  width:100%; box-sizing:border-box; background:#0f1217; border:1px solid #263142;
+  color:#e5e7eb; border-radius:8px; padding:10px;
+}
+.auth-card .actions{ display:flex; gap:8px; align-items:center; }
+
+/* make Log in and Sign up identical size */
+.auth-card .btn,
+.auth-card .btn-secondary{
+  display:inline-flex; align-items:center; justify-content:center;
+  height:36px; padding:0 12px; line-height:1; font-size:14px; border-radius:8px;
+}
+.btn { background:#2563eb; color:#fff; border:none; cursor:pointer; }
+.btn:hover { filter: brightness(1.1); }
+.btn-secondary { background:#1f2937; color:#e5e7eb; border:1px solid #2a3344; text-decoration:none; }
+.btn-secondary:hover { background:#232e44; }
+
+/* small error notice */
+.notice.err{ margin:10px 0; padding:10px 12px; border-radius:8px;
+  background:#3a0d0d; color:#fecaca; border:1px solid #7f1d1d; }
+</style>
+CSS;
+
 ob_start(); ?>
-<div class="card" style="max-width:420px;margin:40px auto;padding:24px">
-  <h1 class="title" style="margin-top:0">Log in</h1>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <h1>Log in</h1>
 
-  <?php if ($errors): ?>
-    <div class="notice err" style="border:1px solid #7f1d1d;background:#1b1212;color:#fca5a5;padding:10px 12px;border-radius:10px;margin-bottom:12px">
-      <?= e(implode(' ', $errors)) ?>
-    </div>
-  <?php endif; ?>
+    <?php if ($err): ?>
+      <div class="notice err"><?= e($err) ?></div>
+    <?php endif; ?>
 
-  <form method="post" novalidate>
-    <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
-    <div class="row">
-      <label class="small">Email or username</label>
-      <input type="text" name="login" required autocomplete="username">
-    </div>
-    <div class="row">
-      <label class="small">Password</label>
-      <input type="password" name="password" required autocomplete="current-password">
-    </div>
-    <div class="row">
-      <button type="submit" class="btn btn-primary">Log in</button>
-      <a class="btn" href="<?= e(asset('register')) ?>" style="margin-left:8px">Sign up</a>
-    </div>
-  </form>
+    <form method="post" autocomplete="on">
+      <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+
+      <div class="row">
+        <label>Email or username</label>
+        <input type="text" name="id" value="<?= e($_POST['id'] ?? '') ?>" autofocus>
+      </div>
+
+      <div class="row">
+        <label>Password</label>
+        <input type="password" name="password">
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn">Log in</button>
+        <a class="btn-secondary" href="<?= e(asset('register')) ?>">Sign up</a>
+      </div>
+    </form>
+  </div>
 </div>
 <?php
 $content = ob_get_clean();
