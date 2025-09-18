@@ -200,7 +200,6 @@ ob_start(); ?>
         <img class="pfp" src="<?= e($avatar) ?>?v=<?= time() ?>" alt="">
         <div style="height:8px"></div>
         <input type="file" name="avatar" accept="image/*">
-        <div class="muted">PNG/JPG/WEBP. We’ll resize on the client.</div>
       </div>
       <div class="row">
       <div style="height: 48px;"></div>

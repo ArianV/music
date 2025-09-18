@@ -199,3 +199,22 @@ input[type='text'],input[type='email'],input[type='password'],input[type='file']
   color:#9ca3af;
   font-size:12px;
 }
+
+/* Link row: chip • input • remove */
+.link-row{
+  display:grid;
+  grid-template-columns: auto 1fr auto; /* chip | input | remove */
+  align-items:center;
+  gap:10px;
+}
+
+/* Prevent overflow on mobile */
+.link-row .svc,         /* your service chip */
+.link-row .remove { white-space: nowrap; }
+.link-row input[type="url"]{ width:100%; min-width:0; } /* allow shrink inside grid */
+
+/* On narrow screens, stack the chip above, keep input + remove on one line */
+@media (max-width:480px){
+  .link-row{ grid-template-columns: 1fr auto; }
+  .link-row .svc{ grid-column: 1 / -1; } /* chip spans full width on its own row */
+}
