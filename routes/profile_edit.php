@@ -160,6 +160,10 @@ textarea{min-height:120px}
 .notice.ok{background:#052e1a;color:#a7f3d0;border:1px solid #064e3b}
 .notice.err{background:#3a0d0d;color:#fecaca;border:1px solid #7f1d1d}
 .muted{color:#9ca3af;font-size:12px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;
+      border-radius:999px;font-size:12px;font-weight:600}
+.pill-public{background:#052e1a;color:#a7f3d0;border:1px solid #064e3b}
+.pill-private{background:#2a1533;color:#e9d5ff;border:1px solid #6b21a8}
 </style>
 CSS;
 
@@ -184,11 +188,36 @@ ob_start(); ?>
 <div class="card" style="max-width:900px;margin:0 auto">
   <h1 style="margin-top:0">Edit profile</h1>
 
+  <div style="margin:6px 0 14px">
+    <span class="pill <?= $public ? 'pill-public' : 'pill-private' ?>">
+      <?= $public ? 'Public' : 'Private' ?>
+    </span>
+  </div>
+
   <?php if ($notice): ?><div class="notice ok"><?= e($notice) ?></div><?php endif; ?>
   <?php if ($upload_err): ?><div class="notice err"><?= e($upload_err) ?></div><?php endif; ?>
 
   <form method="post" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+
+    <div class="grid">
+      <div class="row">
+        <label>Avatar</label>
+        <img class="pfp" src="<?= e($avatar) ?>?v=<?= time() ?>" alt="">
+        <div style="height:8px"></div>
+        <input type="file" name="avatar" accept="image/*">
+        <div class="muted">PNG/JPG/WEBP. We’ll resize on the client.</div>
+      </div>
+      <div class="row">
+        <label>Profile visibility</label>
+        <select name="profile_public">
+          <option value="">— Keep current (<?= $public?'Public':'Private' ?>) —</option>
+          <option value="1" <?= $public ? 'selected' : '' ?>>Public</option>
+          <option value="0" <?= !$public ? 'selected' : '' ?>>Private</option>
+        </select>
+        <div class="muted">Private profiles are hidden unless you share a page link directly.</div>
+      </div>
+    </div>
 
     <div class="grid">
       <div class="row">
@@ -208,25 +237,6 @@ ob_start(); ?>
     <div class="row">
       <label>Bio</label>
       <textarea name="bio" placeholder="Tell listeners who you are..."><?= e($bio) ?></textarea>
-    </div>
-
-    <div class="grid">
-      <div class="row">
-        <label>Avatar</label>
-        <img class="pfp" src="<?= e($avatar) ?>?v=<?= time() ?>" alt="">
-        <div style="height:8px"></div>
-        <input type="file" name="avatar" accept="image/*">
-        <div class="muted">PNG/JPG/WEBP. We’ll resize on the client.</div>
-      </div>
-      <div class="row">
-        <label>Profile visibility</label>
-        <select name="profile_public">
-          <option value="">— Keep current (<?= $public?'Public':'Private' ?>) —</option>
-          <option value="1" <?= $public ? 'selected' : '' ?>>Public</option>
-          <option value="0" <?= !$public ? 'selected' : '' ?>>Private</option>
-        </select>
-        <div class="muted">Private profiles are hidden unless you share a page link directly.</div>
-      </div>
     </div>
 
     <div class="row"><hr style="border:0;border-top:1px solid #1f2430"></div>
