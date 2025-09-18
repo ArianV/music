@@ -1,9 +1,11 @@
 <?php
 // ====== config.php
 
-// Load rich email templates (safe if included multiple times)
-$__email_tpl = __DIR__ . 'lib/email_templates.php';
-if (file_exists($__email_tpl)) { require_once $__email_tpl; } else { error_log('[mail] email_templates.php NOT FOUND at '.$__email_tpl); }
+// ---- Load HTML email templates
+$tplFile = __DIR__ . '/email_templates.php';   // NOTE: same folder as config.php
+if (is_file($tplFile)) {
+    require_once $tplFile;
+}
 
 if (session_status() === PHP_SESSION_NONE) {
   // Safer cookie defaults
@@ -129,53 +131,47 @@ if (!function_exists('is_verified')) {
 }
 
 // ===== Email sending: Brevo API (preferred) or SMTP 587 STARTTLS =====
+// --- Minimal HTML mail sender (Brevo-compatible via SMTP) ---
 if (!function_exists('send_mail')) {
-  function send_mail(string $to, string $subject, string $html, ?string $text=null, array &$debug=null): bool {
+  function send_mail(string $to, string $subject, string $html, ?string $text = null, ?array &$debug = null): bool {
     $debug = $debug ?? [];
 
-    // 1) Brevo HTTP API if available (set BREVO_API_KEY in env)
-    if ($apiKey = getenv('BREVO_API_KEY')) {
-      $from = getenv('MAIL_FROM') ?: ('no-reply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
-      $fromName = getenv('MAIL_FROM_NAME') ?: 'PlugBio';
-
-      $payload = [
-        'sender'      => ['email' => $from, 'name' => $fromName],
-        'to'          => [['email' => $to]],
-        'subject'     => $subject,
-        'htmlContent' => $html,
-        'textContent' => $text ?: strip_tags($html),
-      ];
-      $ch = curl_init('https://api.brevo.com/v3/smtp/email');
-      curl_setopt_array($ch, [
-        CURLOPT_HTTPHEADER => ['api-key: '.$apiKey, 'Content-Type: application/json'],
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => json_encode($payload),
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 20,
-      ]);
-      $body = curl_exec($ch);
-      $code = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
-      $err  = curl_error($ch);
-      curl_close($ch);
-
-      $debug[] = "BREVO_API status=$code body=$body err=$err";
-      return $code >= 200 && $code < 300;
+    // Load PHPMailer – adjust the path if you vendor it elsewhere.
+    if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
+      require_once __DIR__ . '/vendor/autoload.php';
     }
 
-    // 2) SMTP 587 if configured
-    if ($host = getenv('SMTP_HOST')) {
-      $port = (int)(getenv('SMTP_PORT') ?: 587);
-      $user = getenv('SMTP_USER') ?: '';
-      $pass = getenv('SMTP_PASS') ?: '';
-      $from = getenv('MAIL_FROM') ?: ('no-reply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost'));
-      $fromName = getenv('MAIL_FROM_NAME') ?: 'PlugBio';
-      return smtp_send($host,$port,$user,$pass,$from,$fromName,$to,$subject,$html,$text,$debug);
-    }
+    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+    try {
+      $mail->isSMTP();
+      $mail->Host       = getenv('SMTP_HOST') ?: 'smtp-relay.brevo.com';
+      $mail->SMTPAuth   = true;
+      $mail->Username   = getenv('SMTP_USER') ?: '';
+      $mail->Password   = getenv('SMTP_PASS') ?: '';
+      $mail->Port       = (int)(getenv('SMTP_PORT') ?: 587);
+      $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
 
-    $debug[] = 'No mail transport configured (set BREVO_API_KEY or SMTP_* env vars).';
-    return false;
+      $from     = getenv('MAIL_FROM') ?: 'do-not-reply@plugbio.app';
+      $fromName = getenv('MAIL_FROM_NAME') ?: 'PlugBio';
+      $mail->setFrom($from, $fromName);
+      $mail->addAddress($to);
+
+      // IMPORTANT: send HTML + text alternative
+      $mail->isHTML(true);
+      $mail->Subject = $subject;
+      $mail->Body    = $html;
+      $mail->AltBody = $text ?: strip_tags($html);
+
+      $mail->send();
+      return true;
+    } catch (Throwable $e) {
+      $debug[] = $e->getMessage();
+      error_log('[mail] send_mail failed: '.$e->getMessage());
+      return false;
+    }
   }
 }
+
 
 if (!function_exists('smtp_send')) {
   function smtp_send($host,$port,$user,$pass,$from,$fromName,$to,$subject,$html,$text=null,&$debug=[]): bool {
@@ -231,88 +227,73 @@ if (!function_exists('smtp_send')) {
 
 // Start a "email" verification flow 
 if (!function_exists('begin_email_verification')) {
-  function begin_email_verification(int $user_id): void {
-    $pdo = db();
+  function begin_email_verification(int $user_id): bool {
+      $pdo = db();
+      $st  = $pdo->prepare('SELECT id, email, handle FROM users WHERE id=:id');
+      $st->execute([':id' => $user_id]);
+      $u = $st->fetch();
+      if (!$u || empty($u['email'])) return false;
 
-    // token: 24h
-    $token = bin2hex(random_bytes(32));
-    $hash  = hash('sha256', $token);
-    $exp   = (new DateTime('+24 hours'))->format('Y-m-d H:i:sP');
+      // create/replace token
+      $token = bin2hex(random_bytes(32));
+      $pdo->prepare('
+          INSERT INTO email_verifications (user_id, token, created_at)
+          VALUES (:uid, :t, NOW())
+          ON CONFLICT (user_id) DO UPDATE SET token = EXCLUDED.token, created_at = NOW()
+      ')->execute([':uid' => $user_id, ':t' => $token]);
 
-    $pdo->prepare('UPDATE users SET verify_token_hash=:h, verify_token_expires=:e WHERE id=:id')
-        ->execute([':h'=>$hash, ':e'=>$exp, ':id'=>$user_id]);
+      // link + HTML
+      $verifyUrl = asset('verify-email?uid=' . $user_id . '&token=' . $token);
 
-    $st = $pdo->prepare('SELECT email, handle, display_name FROM users WHERE id=:id');
-    $st->execute([':id'=>$user_id]);
-    $u = $st->fetch() ?: [];
-
-    $verifyUrl = asset('verify-email?uid='.$user_id.'&token='.$token);
-
-    // Use the branded template
-    if (function_exists('render_verify_email')) {
-      [$subject, $html, $text] = render_verify_email(
-        $u['display_name'] ?? $u['handle'] ?? 'there',
-        $verifyUrl
-      );
-      $dbg = [];
-      if (!send_mail($u['email'] ?? '', $subject, $html, $text, $dbg)) {
-        error_log('verify email send failed: '.implode(' | ', $dbg));
+      if (function_exists('render_verify_email')) {
+          [$subject, $html, $text] = render_verify_email($u['handle'] ?: 'there', $verifyUrl);
+      } else {
+          // very small fallback, just in case
+          $subject = 'Verify your email for PlugBio';
+          $html    = '<p>Verify your email: <a href="'.e($verifyUrl).'">'.e($verifyUrl).'</a></p>';
+          $text    = "Verify your email: {$verifyUrl}";
       }
-    } else {
-      // Fallback (shouldn’t happen once email_templates.php is present)
-      $subject = 'Verify your email for PlugBio';
-      $html = '<p>Verify your email: <a href="'.e($verifyUrl).'">'.e($verifyUrl).'</a></p>';
-      send_mail($u['email'] ?? '', $subject, $html, strip_tags($html));
-    }
+
+      return send_mail($u['email'], $subject, $html, $text);
   }
 }
 
 // Email change NEW EMAIL
 if (!function_exists('begin_email_change')) {
-  function begin_email_change(int $user_id, string $newEmail): void {
-    $pdo   = db();
-    $token = bin2hex(random_bytes(32));
-    $hash  = hash('sha256', $token);
-    $exp   = (new DateTime('+24 hours'))->format('Y-m-d H:i:sP');
-
-    $pdo->prepare('UPDATE users
-      SET pending_email=:e, pending_email_token_hash=:h, pending_email_expires=:x
-      WHERE id=:id')->execute([':e'=>$newEmail, ':h'=>$hash, ':x'=>$exp, ':id'=>$user_id]);
-
-    $q = $pdo->prepare('SELECT handle, display_name FROM users WHERE id=:id');
-    $q->execute([':id'=>$user_id]);
-    $u = $q->fetch(PDO::FETCH_ASSOC) ?: [];
-
-    $confirmUrl = asset('verify-email-change?uid='.$user_id.'&token='.$token);
-
-    // Use the “confirm email change” template if available; otherwise reuse the verify template
-    if (function_exists('render_change_email')) {
-      [$subject, $html, $text] = render_change_email(
-        $u['display_name'] ?? $u['handle'] ?? 'there',
-        $confirmUrl
-      );
-      $dbg = [];
-      if (!send_mail($newEmail, $subject, $html, $text, $dbg)) {
-        error_log('email-change send failed: '.implode(' | ', $dbg));
+  function begin_email_change(int $user_id, string $newEmail): bool {
+      $pdo = db();
+      $st  = $pdo->prepare('SELECT id, handle FROM users WHERE id=:id');
+      $st->execute([':id' => $user_id]);
+      $u = $st->fetch();
+      if (!$u) return false;
+  
+      // store pending email + token
+      $token = bin2hex(random_bytes(32));
+      $pdo->prepare('
+          INSERT INTO email_change_requests (user_id, new_email, token, created_at)
+          VALUES (:uid, :em, :t, NOW())
+          ON CONFLICT (user_id) DO UPDATE SET new_email = EXCLUDED.new_email, token = EXCLUDED.token, created_at = NOW()
+      ')->execute([
+          ':uid' => $user_id,
+          ':em'  => $newEmail,
+          ':t'   => $token
+      ]);
+    
+      $verifyChangeUrl = asset('verify-email-change?uid=' . $user_id . '&token=' . $token);
+    
+      // Reuse the same nice template (wording still works for “confirm your email”).
+      if (function_exists('render_verify_email')) {
+          [$subject, $html, $text] = render_verify_email($u['handle'] ?: 'there', $verifyChangeUrl);
+          // Tweak the subject to make it clear this is for a change:
+          $subject = 'Confirm your new email for PlugBio';
+          // (Optional) you can also tweak the heading inside email_templates.php if you want separate copy.
+      } else {
+          $subject = 'Confirm your new email for PlugBio';
+          $html    = '<p>Confirm your new email: <a href="'.e($verifyChangeUrl).'">'.e($verifyChangeUrl).'</a></p>';
+          $text    = "Confirm your new email: {$verifyChangeUrl}";
       }
-    } elseif (function_exists('render_verify_email')) {
-      [$subject, $html, $text] = render_verify_email(
-        $u['display_name'] ?? $u['handle'] ?? 'there',
-        $confirmUrl
-      );
-      $subject = 'Confirm your new email for PlugBio';
-      $html = str_replace('Verify your email', 'Confirm your new email', $html);
-      $html = str_replace('Verify email', 'Confirm email', $html);
-      $dbg = [];
-      if (!send_mail($newEmail, $subject, $html, $text, $dbg)) {
-        error_log('email-change send failed: '.implode(' | ', $dbg));
-      }
-    } else {
-      // Fallback
-      $subject = 'Confirm your new email for PlugBio';
-      $html = '<p>Confirm your new email: <a href="'.e($confirmUrl).'">'.e($confirmUrl).'</a></p>';
-      send_mail($newEmail, $subject, $html, strip_tags($html));
-    }
+    
+      return send_mail($newEmail, $subject, $html, $text);
   }
 }
 
