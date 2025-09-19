@@ -179,43 +179,97 @@ if (!function_exists('is_verified')) {
 // ===== Email sending: Brevo API (preferred) or SMTP 587 STARTTLS =====
 // --- Minimal HTML mail sender (Brevo-compatible via SMTP) ---
 if (!function_exists('send_mail')) {
-  function send_mail(string $to, string $subject, string $html, ?string $text = null, ?array &$debug = null): bool {
-    $debug = $debug ?? [];
+  function send_mail($to, $subject, $html, $text = '', $tags = []) {
+    $from      = env('MAIL_FROM', 'no-reply@example.com');
+    $from_name = env('MAIL_FROM_NAME', 'App');
+    $brevo_key = env('BREVO_API_KEY');
 
-    // Load PHPMailer – adjust the path if you vendor it elsewhere.
-    if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
-      require_once __DIR__ . '/vendor/autoload.php';
+    // Prefer PHPMailer if vendor is present
+    $autoload = __DIR__ . '/vendor/autoload.php';
+    if (is_file($autoload)) {
+        require_once $autoload;
+        $mail = new PHPMailer\PHPMailer\PHPMailer(true);
+        try {
+            $smtpHost = env('SMTP_HOST');
+            $smtpUser = env('SMTP_USER');
+            $smtpPass = env('SMTP_PASS');
+            $smtpPort = (int)env('SMTP_PORT', 587);
+
+            if ($smtpHost && $smtpUser && $smtpPass) {
+                $mail->isSMTP();
+                $mail->Host       = $smtpHost;
+                $mail->SMTPAuth   = true;
+                $mail->Username   = $smtpUser;
+                $mail->Password   = $smtpPass;
+                $mail->Port       = $smtpPort;
+                $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+            }
+
+            $mail->CharSet = 'UTF-8';
+            $mail->setFrom($from, $from_name);
+            $mail->addAddress($to);
+            $mail->Subject = $subject;
+            $mail->isHTML(true);
+            $mail->Body    = $html;
+            $mail->AltBody = $text ?: strip_tags($html);
+
+            if (!empty($tags) && is_array($tags)) {
+                foreach ($tags as $k => $v) {
+                    $mail->addCustomHeader('X-Tag-' . $k, (string)$v);
+                }
+            }
+
+            $mail->send();
+            return true;
+        } catch (Throwable $e) {
+            error_log('[mail] PHPMailer failed: ' . $e->getMessage());
+            // Fall through to Brevo if available
+        }
     }
 
-    $mail = new PHPMailer\PHPMailer\PHPMailer(true);
-    try {
-      $mail->isSMTP();
-      $mail->Host       = getenv('SMTP_HOST') ?: 'smtp-relay.brevo.com';
-      $mail->SMTPAuth   = true;
-      $mail->Username   = getenv('SMTP_USER') ?: '';
-      $mail->Password   = getenv('SMTP_PASS') ?: '';
-      $mail->Port       = (int)(getenv('SMTP_PORT') ?: 587);
-      $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+    // Fallback: Brevo Transactional API (no composer needed)
+    if ($brevo_key) {
+        $payload = [
+            'sender'      => ['email' => $from, 'name' => $from_name],
+            'to'          => [['email' => $to]],
+            'subject'     => $subject,
+            'htmlContent' => $html,
+            'textContent' => $text ?: strip_tags($html),
+        ];
+        if (!empty($tags) && is_array($tags)) {
+            $payload['tags'] = array_values(array_map('strval', $tags));
+        }
 
-      $from     = getenv('MAIL_FROM') ?: 'do-not-reply@plugbio.app';
-      $fromName = getenv('MAIL_FROM_NAME') ?: 'PlugBio';
-      $mail->setFrom($from, $fromName);
-      $mail->addAddress($to);
+        $ch = curl_init('https://api.brevo.com/v3/smtp/email');
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'POST');
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Accept: application/json',
+            'api-key: ' . $brevo_key,
+        ]);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        $resp = curl_exec($ch);
+        $err  = curl_error($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
 
-      // IMPORTANT: send HTML + text alternative
-      $mail->isHTML(true);
-      $mail->Subject = $subject;
-      $mail->Body    = $html;
-      $mail->AltBody = $text ?: strip_tags($html);
-
-      $mail->send();
-      return true;
-    } catch (Throwable $e) {
-      $debug[] = $e->getMessage();
-      error_log('[mail] send_mail failed: '.$e->getMessage());
-      return false;
+        if ($err) {
+            error_log('[mail] Brevo curl error: ' . $err);
+            return false;
+        }
+        if ($code < 200 || $code >= 300) {
+            error_log('[mail] Brevo HTTP ' . $code . ' response: ' . $resp);
+            return false;
+        }
+        return true;
     }
-  }
+
+    error_log('[mail] No mail transport available (no vendor/autoload.php and no BREVO_API_KEY).');
+    return false;
+}
+
 }
 
 
