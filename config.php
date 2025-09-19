@@ -414,7 +414,7 @@ if (!function_exists('begin_email_change')) {
 
 // Uploads 
 $uploadDirEnv = getenv('UPLOAD_DIR');
-if (!defined('UPLOAD_DIR')) define('UPLOAD_DIR', $uploadDirEnv ?: (__DIR__ . '/uploads'));
+if (!defined('UPLOAD_DIR')) define('UPLOAD_DIR', $uploadDirEnv ?: ('/mnt/data/uploads'));
 if (!defined('UPLOAD_URI')) define('UPLOAD_URI', rtrim(BASE_URL, '/') . '/uploads');
 @mkdir(UPLOAD_DIR, 0777, true);
 @chmod(UPLOAD_DIR, 0777);
