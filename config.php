@@ -131,32 +131,70 @@ if (!function_exists('is_verified')) {
 }
 
 // ===== Email sending: Brevo API (preferred) or SMTP 587 STARTTLS =====
-// --- Minimal HTML mail sender (Brevo-compatible via SMTP) ---
+// --- Robust HTML mail sender (tries Composer, then manual includes; HTML + text) ---
 if (!function_exists('send_mail')) {
   function send_mail(string $to, string $subject, string $html, ?string $text = null, ?array &$debug = null): bool {
     $debug = $debug ?? [];
 
-    // Load PHPMailer – adjust the path if you vendor it elsewhere.
-    if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
-      require_once __DIR__ . '/vendor/autoload.php';
+    // Try to load PHPMailer (Composer autoload first)
+    if (!class_exists('PHPMailer\\PHPMailer\\PHPMailer')) {
+      foreach ([
+        __DIR__ . '/vendor/autoload.php',        // repo root
+        __DIR__ . '/../vendor/autoload.php',     // in case your code is in /var/www/html and vendor is one up
+      ] as $autoloader) {
+        if (is_file($autoloader)) {
+          require_once $autoloader;
+          break;
+        }
+      }
     }
 
+    // Try manual includes if PHPMailer not loaded via Composer
+    if (!class_exists('PHPMailer\\PHPMailer\\PHPMailer')) {
+      $manual = [
+        __DIR__.'/PHPMailer/src/Exception.php',
+        __DIR__.'/PHPMailer/src/PHPMailer.php',
+        __DIR__.'/PHPMailer/src/SMTP.php',
+      ];
+      $haveAll = true;
+      foreach ($manual as $m) { if (!is_file($m)) { $haveAll = false; break; } }
+      if ($haveAll) {
+        foreach ($manual as $m) require_once $m;
+      }
+    }
+
+    // If still not available, fall back to mail() so we don't fatal
+    if (!class_exists('PHPMailer\\PHPMailer\\PHPMailer')) {
+      // Fallback – not ideal on Railway (no local MTA), but avoids 500
+      $from     = getenv('MAIL_FROM') ?: 'do-not-reply@plugbio.app';
+      $fromName = getenv('MAIL_FROM_NAME') ?: 'PlugBio';
+      $headers  = "MIME-Version: 1.0\r\n";
+      $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+      $headers .= "From: ".($fromName ? "$fromName <$from>" : $from)."\r\n";
+
+      $ok = @mail($to, $subject, $html, $headers);
+      if (!$ok) $debug[] = 'mail() fallback failed (no PHPMailer/vendor and no local MTA).';
+      error_log('[mail] PHPMailer not found — used mail() fallback: '.($ok?'OK':'FAIL'));
+      return $ok;
+    }
+
+    // PHPMailer path: use SMTP with Brevo
     $mail = new PHPMailer\PHPMailer\PHPMailer(true);
     try {
       $mail->isSMTP();
       $mail->Host       = getenv('SMTP_HOST') ?: 'smtp-relay.brevo.com';
       $mail->SMTPAuth   = true;
-      $mail->Username   = getenv('SMTP_USER') ?: '';
-      $mail->Password   = getenv('SMTP_PASS') ?: '';
+      $mail->Username   = getenv('SMTP_USER') ?: '';  // e.g. 974aee001@smtp-brevo.com
+      $mail->Password   = getenv('SMTP_PASS') ?: '';  // your Brevo SMTP key
       $mail->Port       = (int)(getenv('SMTP_PORT') ?: 587);
       $mail->SMTPSecure = PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
 
       $from     = getenv('MAIL_FROM') ?: 'do-not-reply@plugbio.app';
       $fromName = getenv('MAIL_FROM_NAME') ?: 'PlugBio';
+
       $mail->setFrom($from, $fromName);
       $mail->addAddress($to);
 
-      // IMPORTANT: send HTML + text alternative
       $mail->isHTML(true);
       $mail->Subject = $subject;
       $mail->Body    = $html;
@@ -171,6 +209,7 @@ if (!function_exists('send_mail')) {
     }
   }
 }
+
 
 
 if (!function_exists('smtp_send')) {
