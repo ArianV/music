@@ -1,13 +1,12 @@
 <?php
 require_once __DIR__ . '/../config.php';
-// simple liveness + optional DB ping
+header('Content-Type: text/plain');
 try {
-  db()->query('SELECT 1');  // comment out if you want pure liveness
-  http_response_code(200);
-  header('Content-Type: text/plain'); 
-  echo "OK";
+  $pdo = db();
+  $pdo->query('SELECT 1');
+  echo "ok\n";
 } catch (Throwable $e) {
   http_response_code(500);
-  header('Content-Type: text/plain');
-  echo "DB_FAIL";
+  error_log("[health] DB FAIL: ".$e->getMessage());
+  echo "db_error: ".$e->getMessage()."\n";
 }
