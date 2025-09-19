@@ -1,11 +1,32 @@
 <?php
 // ====== config.php
-
 // ---- Load HTML email templates
 $tplFile = __DIR__ . '/email_templates.php';   // NOTE: same folder as config.php
 if (is_file($tplFile)) {
     require_once $tplFile;
 }
+
+// ---- harden error logging to STDERR (Railway-visible)
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+ini_set('error_log', ''); // empty = stderr in many PHP builds
+
+set_error_handler(function($sev,$msg,$file,$line){
+  error_log("[php-error] $msg in $file:$line");
+  return false; // let PHP handle normal flow too
+});
+set_exception_handler(function(Throwable $e){
+  error_log("[php-exception] ".$e->getMessage()." in ".$e->getFile().":".$e->getLine());
+  http_response_code(500);
+  echo "Application error";
+});
+register_shutdown_function(function(){
+  $e = error_get_last();
+  if ($e && in_array($e['type'], [E_ERROR,E_PARSE,E_CORE_ERROR,E_COMPILE_ERROR])) {
+    error_log("[php-fatal] {$e['message']} in {$e['file']}:{$e['line']}");
+  }
+});
+
 
 if (session_status() === PHP_SESSION_NONE) {
   // Safer cookie defaults
