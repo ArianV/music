@@ -524,3 +524,44 @@ if (!function_exists('route_dispatch')) {
     }
   }
 }
+
+function can_change_username(int $user_id): array {
+  $pdo = db();
+
+  // How many changes in the last 14 days?
+  $q = $pdo->prepare("
+    SELECT changed_at
+    FROM username_changes
+    WHERE user_id = :uid
+      AND changed_at >= now() - INTERVAL '14 days'
+    ORDER BY changed_at ASC
+  ");
+  $q->execute([':uid' => $user_id]);
+  $rows = $q->fetchAll(PDO::FETCH_COLUMN);
+
+  $allowed = count($rows) < 2;
+  $next_at = null;
+
+  if (!$allowed) {
+    // Oldest change in window + 14d = next time the user is allowed again
+    $first = $rows[0];
+    $q2 = $pdo->query("SELECT (TIMESTAMPTZ '" . $first . "' + INTERVAL '14 days')::timestamptz");
+    $next_at = $q2->fetchColumn();
+  }
+  return ['allowed' => $allowed, 'next_at' => $next_at];
+}
+
+function record_username_change(int $user_id, ?string $old, string $new): void {
+  $pdo = db();
+  $ip = $_SERVER['REMOTE_ADDR'] ?? null;
+  $st = $pdo->prepare("
+    INSERT INTO username_changes (user_id, old_username, new_username, changed_ip)
+    VALUES (:uid, :old, :new, :ip)
+  ");
+  $st->execute([
+    ':uid' => $user_id,
+    ':old' => $old,
+    ':new' => $new,
+    ':ip'  => $ip,
+  ]);
+}
