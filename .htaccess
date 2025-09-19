@@ -1,20 +1,9 @@
-# --- Security & HTTPS hardening (revised to avoid loops behind proxies) ---
+# --- HTTPS redirect behind Cloudflare (loop-safe) ---
 RewriteEngine On
-
-# If the original request from the client was HTTP (as told by the proxy),
-# or this server connection isn't HTTPS, redirect to HTTPS.
 RewriteCond %{HTTP:X-Forwarded-Proto} =http [OR]
-RewriteCond %{HTTPS} !=on
+RewriteCond %{HTTP:CF-Visitor} '"scheme":"http"'
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
-
-<IfModule mod_headers.c>
-  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-  Header always set X-Content-Type-Options "nosniff"
-  Header always set X-Frame-Options "SAMEORIGIN"
-  Header always set Referrer-Policy "strict-origin-when-cross-origin"
-  Header always set Content-Security-Policy "upgrade-insecure-requests"
-</IfModule>
-# --- End hardening ---
+# --- End HTTPS redirect ---
 
 RewriteBase /
 RewriteCond %{REQUEST_FILENAME} -f [OR]
