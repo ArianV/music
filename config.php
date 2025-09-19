@@ -45,49 +45,95 @@ if (!function_exists('asset')) {
 
 // ---------- Database (Postgres via PDO) ----------
 if (!function_exists('db')) {
-  function db(): PDO {
-    static $pdo = null;
-    if ($pdo) return $pdo;
+  function env(string $key, $default = null) {
+    $v = getenv($key);
+    return ($v === false || $v === '') ? $default : $v;
+}
 
-    $opts = [
-      PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-      PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-      PDO::ATTR_EMULATE_PREPARES   => true,   // avoid cached-plan issues after ALTER TABLE
-      PDO::ATTR_STRINGIFY_FETCHES  => false,
+function normalize_sslmode($val) {
+    $val = strtolower(trim((string)$val));
+    $allowed = ['disable','allow','prefer','require','verify-ca','verify-full'];
+    if (!in_array($val, $allowed, true)) return 'require';
+    return $val;
+}
+
+function parse_database_url($url) {
+    $p = parse_url($url);
+    if (!$p || empty($p['host'])) return null;
+
+    $query = [];
+    if (!empty($p['query'])) parse_str($p['query'], $query);
+
+    return [
+        'driver'  => ($p['scheme'] ?? 'postgresql'),
+        'host'    => $p['host'] ?? 'localhost',
+        'port'    => $p['port'] ?? 5432,
+        'user'    => $p['user'] ?? null,
+        'pass'    => $p['pass'] ?? null,
+        'dbname'  => isset($p['path']) ? ltrim($p['path'], '/') : null,
+        'sslmode' => normalize_sslmode($query['sslmode'] ?? 'require'),
+        'extra'   => $query,
     ];
+}
 
-    // Prefer a DATABASE_URL (Neon/Railway style)
-    $url = getenv('DATABASE_URL') ?: getenv('PGURL') ?: '';
-    if ($url && (str_starts_with($url, 'postgres://') || str_starts_with($url, 'postgresql://'))) {
-      $parts  = parse_url($url);
-      $host   = $parts['host'] ?? 'localhost';
-      $port   = (string)($parts['port'] ?? 5432);
-      $dbname = ltrim($parts['path'] ?? '/postgres', '/');
-      $user   = $parts['user'] ?? '';
-      $pass   = $parts['pass'] ?? '';
+function pg_config_from_env() {
+    $host = env('PGHOST', env('PG_HOST', env('DB_HOST')));
+    $port = env('PGPORT', env('PG_PORT', env('DB_PORT', 5432)));
+    $user = env('PGUSER', env('PG_USER', env('DB_USER')));
+    $pass = env('PGPASSWORD', env('PG_PASS', env('DB_PASS')));
+    $name = env('PGDATABASE', env('PG_DB', env('DB_NAME', env('PGDATABASE'))));
+    $ssl  = env('PGSSLMODE', env('DB_SSLMODE', 'require'));
 
-      // Ensure sslmode=require for Neon unless already given
-      $query = [];
-      if (!empty($parts['query'])) parse_str($parts['query'], $query);
-      $sslmode = $query['sslmode'] ?? (getenv('DB_SSLMODE') ?: 'require');
+    if (!$host || !$user || !$name) return null;
 
-      $dsn = "pgsql:host={$host};port={$port};dbname={$dbname};sslmode={$sslmode}";
-      $pdo = new PDO($dsn, $user, $pass, $opts);
-      return $pdo;
+    return [
+        'driver'  => 'postgresql',
+        'host'    => $host,
+        'port'    => (int)$port,
+        'user'    => $user,
+        'pass'    => $pass,
+        'dbname'  => $name,
+        'sslmode' => normalize_sslmode($ssl),
+        'extra'   => [],
+    ];
+}
+
+function db() {
+    static $pdo = null;
+    if ($pdo instanceof PDO) return $pdo;
+
+    $cfg = null;
+    if ($url = env('DATABASE_URL')) {
+        $cfg = parse_database_url($url);
+    }
+    if (!$cfg) $cfg = pg_config_from_env();
+
+    if (!$cfg) {
+        throw new RuntimeException('Database config missing: set DATABASE_URL or PG_* / DB_* variables.');
     }
 
-    // Fallback to discrete env vars
-    $host   = getenv('DB_HOST') ?: getenv('PG_HOST') ?: 'localhost';
-    $port   = (string)(getenv('DB_PORT') ?: getenv('PG_PORT') ?: '5432');
-    $dbname = getenv('DB_NAME') ?: getenv('PG_DB') ?: getenv('PGDATABASE') ?: 'postgres';
-    $user   = getenv('DB_USER') ?: getenv('PG_USER') ?: getenv('PGUSER') ?: 'postgres';
-    $pass   = getenv('DB_PASS') ?: getenv('PG_PASS') ?: getenv('PGPASSWORD') ?: '';
-    $ssl    = getenv('DB_SSLMODE') ?: '';
+    if (!in_array($cfg['driver'], ['postgres','postgresql','pgsql'], true)) {
+        throw new RuntimeException('Only PostgreSQL is supported in this build.');
+    }
 
-    $dsn = "pgsql:host={$host};port={$port};dbname={$dbname}" . ($ssl ? ";sslmode={$ssl}" : '');
-    $pdo = new PDO($dsn, $user, $pass, $opts);
+    $dsn = sprintf(
+        'pgsql:host=%s;port=%d;dbname=%s;sslmode=%s',
+        $cfg['host'],
+        (int)$cfg['port'],
+        $cfg['dbname'],
+        $cfg['sslmode']
+    );
+
+    $options = [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES   => false,
+    ];
+
+    $pdo = new PDO($dsn, $cfg['user'], $cfg['pass'], $options);
     return $pdo;
-  }
+}
+
 }
 
 // ---------- CSRF ----------
