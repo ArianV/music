@@ -1,8 +1,10 @@
-# --- Security & HTTPS hardening (added) ---
-# Force HTTPS (also when behind Cloudflare proxy)
+# --- Security & HTTPS hardening (revised to avoid loops behind proxies) ---
 RewriteEngine On
-RewriteCond %{HTTPS} !=on [OR]
-RewriteCond %{HTTP:CF-Visitor} '"scheme":"http"'
+
+# If the original request from the client was HTTP (as told by the proxy),
+# or this server connection isn't HTTPS, redirect to HTTPS.
+RewriteCond %{HTTP:X-Forwarded-Proto} =http [OR]
+RewriteCond %{HTTPS} !=on
 RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 <IfModule mod_headers.c>
@@ -10,13 +12,10 @@ RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
   Header always set X-Content-Type-Options "nosniff"
   Header always set X-Frame-Options "SAMEORIGIN"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
-  # Upgrade any http:// asset URLs to https:// automatically
   Header always set Content-Security-Policy "upgrade-insecure-requests"
 </IfModule>
 # --- End hardening ---
 
-# .htaccess (beside index.php)
-RewriteEngine On
 RewriteBase /
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
