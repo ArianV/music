@@ -13,11 +13,13 @@ if (session_status() === PHP_SESSION_NONE) {
   $cookiePath = '/';
   session_set_cookie_params([
     'lifetime' => 0,
-    'path'     => $cookiePath,
+    'path' => '/',
+    'domain' => 'plugb.ink',
+    'secure' => true,
     'httponly' => true,
     'samesite' => 'Lax',
-    'secure'   => $scheme === 'https',
   ]);
+
   session_start();
 }
 
