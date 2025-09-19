@@ -16,21 +16,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /var/www/html
 COPY . /var/www/html
 
-# Apache: allow .htaccess in /var/www/html without touching APACHE_DOCUMENT_ROOT
+# Apache: allow .htaccess in /var/www/html
 RUN chown -R www-data:www-data /var/www/html \
- && printf '%s\n' "<Directory /var/www/html>" "  AllowOverride All" "  Require all granted" "</Directory>" \
-      > /etc/apache2/conf-available/app-override.conf \
+ && printf '%s\n' \
+   "<Directory /var/www/html>" \
+   "  AllowOverride All" \
+   "  Require all granted" \
+   "</Directory>" \
+   > /etc/apache2/conf-available/app-override.conf \
  && a2enconf app-override
 
 # ---- Persistent uploads via Railway Volume ----
 # Expect a Railway Volume mounted at /mnt/data
 RUN mkdir -p /mnt/data/uploads \
  && rm -rf /var/www/html/uploads || true \
- && ln -s /mnt/data/uploads /var/www/html/uploads \
- && chown -h www-data:www-data /var/www/html/uploads \
- && chown -R www-data:www-data /mnt/data/uploads
+ && ln -s /mnt/data/uploads /var/www/html/uploads
 
-# PHP runtime tweaks (mirror your .user.ini)
+# PHP runtime tweaks
 RUN { \
       echo "file_uploads=On"; \
       echo "upload_max_filesize=16M"; \
@@ -45,4 +47,14 @@ EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
   CMD curl -fsS http://127.0.0.1/health || exit 1
 
-CMD ["apache2-foreground"]
+# ---- Start script fixes volume perms, then starts Apache ----
+RUN printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -e' \
+  'mkdir -p /mnt/data/uploads' \
+  'chown -R www-data:www-data /mnt/data || true' \
+  'chown -R www-data:www-data /mnt/data/uploads || true' \
+  'exec apache2-foreground' \
+  > /usr/local/bin/start.sh && chmod +x /usr/local/bin/start.sh
+
+CMD ["/usr/local/bin/start.sh"]
