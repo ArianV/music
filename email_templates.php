@@ -139,7 +139,7 @@ if (!function_exists('render_verify_email')) {
             <td align="left" style="padding:4px 8px 0 8px;color:{$muted};
                                     font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
                                     font-size:12px;">
-              <a href="https://plugbio.app" style="color:{$accent};text-decoration:none;">plugbio.app</a>
+              <a href="https://plugb.ink" style="color:{$accent};text-decoration:none;">plugb.ink</a>
             </td>
           </tr>
 
