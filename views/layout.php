@@ -21,7 +21,7 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
   <meta charset="utf-8">
   <title><?= e($title) ?></title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="<?= e(asset('assets/styles.css?v4')) ?>">
+  <link rel="stylesheet" href="<?= e(asset('assets/styles.css')) ?>">
 
   <!-- Favicons -->
   <link rel="icon" type="image/svg+xml" href="<?= e(asset('assets/favicon.svg')) ?>">
