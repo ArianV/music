@@ -70,7 +70,7 @@ body.layout{min-height:100vh;display:flex;flex-direction:column}
 .table{width:100%;border-collapse:collapse}
 .table th,.table td{padding:10px;border-bottom:1px solid #222}
 .form-row{display:flex;gap:12px;flex-wrap:wrap;padding:5px}
-input[type='text'],input[type='email'],input[type='password'],input[type='file'],textarea,select{
+input[type='text'],input[type='email'],input[type='password'],input[type='file'],input[type='tel'],textarea,select{
   width:100%;padding:10px;border:1px solid #222;border-radius:10px;background:#0f0f16;color:var(--fg)
 }
 

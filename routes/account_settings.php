@@ -191,7 +191,6 @@ ob_start();
         <span class="inline-pill">@</span>
         <input type="text" name="handle" value="<?= e($u['handle'] ?? '') ?>" placeholder="yourname" style="max-width:240px">
       </div>
-      <div class="muted" style="margin-top:6px">3–20 chars, letters/numbers/underscore only. Changes your public URL.</div>
       <?php
         // Remaining username changes / cooldown hint
         $info = can_change_username((int)$u['id']);
