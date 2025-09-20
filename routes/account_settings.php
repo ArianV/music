@@ -71,8 +71,8 @@ ob_start();
       if (!$errors && $attempted_username) {
         $gate = can_change_username((int)$u['id']);
         if (!$gate['allowed']) {
-          $when = $gate['next_at'] ? date('Y-m-d H:i', strtotime($gate['next_at'])) : 'later';
-          $errors[] = "You’ve reached the limit (2 changes per 14 days). Try again after $when.";
+          $when = $gate['next_at'] ? date('m-d-Y', strtotime($gate['next_at'])) : 'later';
+          $errors[] = "You’ve reached the limit (2 changes per 14 days). Try again after <strong>$when</strong>";
         }
       }
 
@@ -187,16 +187,6 @@ ob_start();
         <span class="inline-pill">@</span>
         <input type="text" name="handle" value="<?= e($u['handle'] ?? '') ?>" placeholder="yourname" style="max-width:240px">
       </div>
-      <?php
-        // Show limit/cooldown ONLY if user attempted to change username this submit
-        if ($attempted_username) {
-          $info = can_change_username((int)$u['id']);
-          if (!$info['allowed']) {
-            echo '<div class="muted" style="margin-top:4px">Limit reached. Try again after ' .
-                 e(date('m-d-Y', strtotime($info['next_at']))) . '.</div>';
-          }
-        }
-      ?>
     </div>
 
     <div class="row">
