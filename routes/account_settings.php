@@ -216,7 +216,6 @@ ob_start();
     <div class="row">
       <label>Phone</label>
       <input type="tel" name="phone" value="<?= e($u['phone'] ?? '') ?>" placeholder="(555) 555-5555">
-      <div class="muted" style="margin-top:6px">Optional. Numbers only; we’ll clean up formatting.</div>
     </div>
     <?php endif; ?>
 
