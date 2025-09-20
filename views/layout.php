@@ -1,12 +1,25 @@
 <?php
 // views/layout.php
 require_once __DIR__ . '/../config.php';
-$me = current_user();
+$base_url  = rtrim(getenv('BASE_URL') ?: 'https://www.plugb.ink', '/');
+
+if (!function_exists('meta_get')) {
+  // Fallback if helpers weren’t included yet (won’t overwrite if defined in config.php)
+  $GLOBALS['__meta'] = $GLOBALS['__meta'] ?? [];
+  function meta_get(string $k, string $default = ''): string {
+    return $GLOBALS['__meta'][$k] ?? $default;
+  }
+}
+
+$me = function_exists('current_user') ? (current_user() ?? null) : null;
 
 $brand   = 'PlugBio';
 $title   = $title   ?? $brand;
 $head    = $head    ?? '';
 $content = $content ?? '';
+$desc  = meta_get('description', 'Create beautiful link pages for your music.');
+$image = meta_get('image', $base_url.'/favicon-512.png');
+$url   = meta_get('url', $base_url.($_SERVER['REQUEST_URI'] ?? '/'));
 
 $handle = $me['handle'] ?? '';
 $avatar = $me['avatar_uri'] ?? '';
@@ -22,6 +35,23 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
   <title><?= e($title) ?></title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="<?= e(asset('assets/styles.css')) ?>">
+
+  <meta name="description" content="<?= e($desc) ?>">
+
+  <!-- Open Graph -->
+  <meta property="og:site_name" content="<?= e($site_name) ?>">
+  <meta property="og:title" content="<?= e($title) ?>">
+  <meta property="og:description" content="<?= e($desc) ?>">
+  <meta property="og:url" content="<?= e($url) ?>">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="<?= e($image) ?>">
+  <meta property="og:image:alt" content="<?= e($title) ?>">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="<?= e($title) ?>">
+  <meta name="twitter:description" content="<?= e($desc) ?>">
+  <meta name="twitter:image" content="<?= e($image) ?>">
 
   <!-- Favicons -->
   <link rel="icon" type="image/svg+xml" href="<?= e(asset('assets/favicon.svg')) ?>">
@@ -108,6 +138,7 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
       <?php if ($me): ?>
         <a class="link" href="<?= e(asset('feed')) ?>">Feed</a>
         <a class="link" href="<?= e(asset('dashboard')) ?>">Dashboard</a>
+        <a class="link" href="<?= e(asset('analytics')) ?>" style="color: blue;">Creator Tools</a>
         <a class="link" href="<?= e(asset('/pages/new')) ?>">New Page</a>
 
         <div class="nav-user">

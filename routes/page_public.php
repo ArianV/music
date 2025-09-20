@@ -206,6 +206,11 @@ if (!$is_public && $is_owner) {
           . '</div>';
 }
 
+// --- record a unique view (per session per day) and ignore bots ---
+if (function_exists('record_page_view')) {
+  record_page_view((int)$page['id']);
+}
+
 ob_start(); ?>
 <article class="card" style="max-width:340px;margin:24px auto;">
   <div class="card-media.full">

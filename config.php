@@ -480,6 +480,64 @@ if (!function_exists('log_msg')) {
   function log_msg(string $msg): void { error_log($msg); }
 }
 
+
+// --- META TAG HELPER (SEO/OG/Twitter) ---
+$GLOBALS['__meta'] = $GLOBALS['__meta'] ?? [];
+function meta_set(array $pairs): void {
+  $GLOBALS['__meta'] = array_merge($GLOBALS['__meta'], $pairs);
+}
+function meta_get(string $k, string $default = ''): string {
+  return $GLOBALS['__meta'][$k] ?? $default;
+}
+
+// --- BASIC BOT CHECK ---
+function is_bot_ua(?string $ua): bool {
+  if (!$ua) return false;
+  $ua = strtolower($ua);
+  foreach (['bot','crawl','spider','slurp','curl','fetch','httpclient','headless','phantom','monitor'] as $needle) {
+    if (str_contains($ua, $needle)) return true;
+  }
+  return false;
+}
+
+// --- RECORD A PAGE VIEW (unique per session per day) ---
+function record_page_view(int $page_id): void {
+  // skip if obvious bot
+  $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+  if (is_bot_ua($ua)) return;
+
+  $sess = session_id() ?: bin2hex(random_bytes(8));
+  $sess = substr($sess, 0, 32);
+
+  $viewer_id = current_user()['id'] ?? null;
+  $ref_host  = null;
+  if (!empty($_SERVER['HTTP_REFERER'])) {
+    $ref = parse_url($_SERVER['HTTP_REFERER'], PHP_URL_HOST);
+    if ($ref && $ref !== ($_SERVER['HTTP_HOST'] ?? '')) $ref_host = $ref;
+  }
+
+  // Best-effort, ignore duplicate within the same day for same session/page
+  $sql = "
+    INSERT INTO page_views (page_id, user_id, session_key, user_agent, ref_host)
+    VALUES (:pid, :uid, :sk, :ua, :rh)
+    ON CONFLICT ON CONSTRAINT uq_page_views_unique_daily DO NOTHING
+  ";
+  try {
+    $st = db()->prepare($sql);
+    $st->execute([
+      ':pid' => $page_id,
+      ':uid' => $viewer_id,
+      ':sk'  => $sess,
+      ':ua'  => mb_substr($ua, 0, 500),
+      ':rh'  => $ref_host,
+    ]);
+  } catch (Throwable $e) {
+    error_log('[views] insert failed: '.$e->getMessage());
+  }
+}
+
+
+
 // ---------- Router ----------
 $GLOBALS['__ROUTES'] = $GLOBALS['__ROUTES'] ?? [];
 $GLOBALS['__RREG']   = $GLOBALS['__RREG']   ?? [];
@@ -521,6 +579,11 @@ if (!function_exists('route_dispatch')) {
       require __DIR__ . '/routes/404.php';
     } else {
       exit('Not found');
+    }
+
+    if ($path === '/analytics') {
+      require __DIR__ . '/routes/analytics.php';
+      return;
     }
   }
 }
