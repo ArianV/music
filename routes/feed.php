@@ -30,7 +30,7 @@ $pages = $st->fetchAll(PDO::FETCH_ASSOC);
 
 // Link to /u/{handle}
 function page_public_url(array $p): string {
-  return '/u/' . urlencode($p['handle']);
+  return '/s/' . urlencode($p['slug']);
 }
 
 // helper: initial for placeholder
