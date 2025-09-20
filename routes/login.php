@@ -26,7 +26,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       FROM users
       WHERE lower(email)  = lower(:id)
          OR lower(handle) = lower(:id)
-         OR lower(coalesce(username, '')) = lower(:id)
       LIMIT 1
     ");
     $st->execute([':id' => $id]);
