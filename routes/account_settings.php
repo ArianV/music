@@ -9,7 +9,9 @@ $errors = [];
 $saved  = false;
 $flash  = ''; // one-off success message (e.g., cancel pending email)
 
-// --- Small helpers (same rules you’ve been using) ---
+/**
+ * Small helpers (same rules you were using)
+ */
 if (!function_exists('normalize_handle')) {
   function normalize_handle(string $h): string {
     $h = strtolower(trim($h));
@@ -31,6 +33,10 @@ if (!function_exists('clean_phone')) {
   }
 }
 
+// UI flags: only show hints AFTER user actually attempts a change
+$attempted_username = false;
+$attempted_email    = false;
+
 ob_start();
 ?>
 
@@ -38,66 +44,39 @@ ob_start();
   <h1>Account settings</h1>
 
   <?php
-  // Notices
-  if ($saved && !$errors): ?>
-    <div class="notice ok">Saved changes.</div>
-  <?php endif; ?>
-  <?php if ($flash): ?>
-    <div class="notice ok"><?= e($flash) ?></div>
-  <?php endif; ?>
-  <?php if ($errors): ?>
-    <div class="notice err"><?= e(implode("\n", $errors)) ?></div>
-  <?php endif; ?>
-
-  <?php if (!empty($u['pending_email'])): ?>
-    <div class="notice" style="background:#fff7e6;border:1px solid #ffd27a">
-      You’ve requested to change your email to <strong><?= e($u['pending_email']) ?></strong>.
-      Please check your inbox and confirm. Your current email remains active until you confirm.
-      <form method="post" style="display:inline-block;margin-left:8px">
-        <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
-        <input type="hidden" name="form" value="resend_verification">
-        <button class="btn" style="height:28px;padding:0 10px;font-size:12px">Resend confirmation</button>
-      </form>
-      <form method="post" style="display:inline-block;margin-left:8px">
-        <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
-        <input type="hidden" name="form" value="cancel_pending">
-        <button class="btn danger" style="height:28px;padding:0 10px;font-size:12px">Cancel</button>
-      </form>
-    </div>
-  <?php endif; ?>
-
-  <?php
   // --- POST actions ---
   if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $which = $_POST['form'] ?? '';
 
     if ($which === 'basics') {
-      $email  = trim($_POST['email'] ?? '');
-      $handle = normalize_handle($_POST['handle'] ?? ($u['handle'] ?? ''));
-      $old_handle = $u['handle'] ?? null; // capture for logging after save
-      $phone  = clean_phone($_POST['phone'] ?? null);
+      $email_in  = trim($_POST['email'] ?? '');
+      $handle_in = normalize_handle($_POST['handle'] ?? ($u['handle'] ?? ''));
+      $phone_in  = clean_phone($_POST['phone'] ?? null);
+
+      // What did the user actually try to change?
+      $attempted_username = strcasecmp((string)($u['handle'] ?? ''), $handle_in) !== 0;
+      $attempted_email    = strcasecmp((string)($u['email']  ?? ''), $email_in)   !== 0;
 
       // email validation
-      if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+      if (!filter_var($email_in, FILTER_VALIDATE_EMAIL)) {
         $errors[] = 'Please enter a valid email address.';
       } else {
         $st = db()->prepare('SELECT 1 FROM users WHERE lower(email)=lower(:e) AND id<>:me LIMIT 1');
-        $st->execute([':e'=>$email, ':me'=>$u['id']]);
+        $st->execute([':e'=>$email_in, ':me'=>$u['id']]);
         if ($st->fetch()) $errors[] = 'That email is already in use.';
       }
 
       // handle validation
-      if (!handle_is_valid($handle)) {
+      if (!handle_is_valid($handle_in)) {
         $errors[] = 'Username must be 3–20 characters (letters, numbers, underscores).';
       } else {
         $st = db()->prepare('SELECT 1 FROM users WHERE lower(handle)=lower(:h) AND id<>:me LIMIT 1');
-        $st->execute([':h'=>$handle, ':me'=>$u['id']]);
+        $st->execute([':h'=>$handle_in, ':me'=>$u['id']]);
         if ($st->fetch()) $errors[] = 'That username is taken.';
       }
 
-      // Rate limit: max 2 username changes in a rolling 14 days, only if actually changing
-      $handle_changed = strcasecmp((string)($u['handle'] ?? ''), $handle) !== 0;
-      if (!$errors && $handle_changed) {
+      // Rate limit: max 2 username changes in a rolling 14 days — only if attempting to change
+      if (!$errors && $attempted_username) {
         $gate = can_change_username((int)$u['id']);
         if (!$gate['allowed']) {
           $when = $gate['next_at'] ? date('Y-m-d H:i', strtotime($gate['next_at'])) : 'later';
@@ -106,12 +85,14 @@ ob_start();
       }
 
       if (!$errors) {
-        // Update handle/phone immediately
+        $old_handle = $u['handle'] ?? null;
+
+        // update handle/phone immediately
         $sets   = ['handle=:h'];
-        $params = [':h'=>$handle, ':id'=>$u['id']];
+        $params = [':h'=>$handle_in, ':id'=>$u['id']];
 
         if (function_exists('table_has_column') && table_has_column(db(),'users','phone')) {
-          $sets[] = 'phone=:p'; $params[':p'] = $phone;
+          $sets[] = 'phone=:p'; $params[':p'] = $phone_in;
         }
         if (function_exists('table_has_column') && table_has_column(db(),'users','updated_at')) {
           $sets[] = 'updated_at=NOW()';
@@ -121,18 +102,17 @@ ob_start();
         db()->prepare($sql)->execute($params);
 
         // Log username change if it actually changed
-        if (!empty($handle_changed) && $handle_changed) {
-          record_username_change((int)$u['id'], $old_handle, $handle);
+        if ($attempted_username) {
+          record_username_change((int)$u['id'], $old_handle, $handle_in);
         }
 
         // If email changed, kick off "verify new email" flow (do NOT switch yet)
-        if (strcasecmp($email, (string)($u['email'] ?? '')) !== 0) {
-          // requires begin_email_change() helper in config.php
-          begin_email_change((int)$u['id'], $email);
+        if ($attempted_email) {
+          begin_email_change((int)$u['id'], $email_in);
         }
 
         $saved = true;
-        $u = current_user(); // refresh
+        $u = current_user(); // refresh for display
       }
     }
 
@@ -152,7 +132,7 @@ ob_start();
       }
 
       if (!$errors) {
-        $hash = password_hash($new, PASSWORD_DEFAULT);
+        $hash   = password_hash($new, PASSWORD_DEFAULT);
         $sets   = ['password_hash=:ph'];
         $params = [':ph'=>$hash, ':id'=>$u['id']];
         if (function_exists('table_has_column') && table_has_column(db(),'users','updated_at')) {
@@ -180,6 +160,35 @@ ob_start();
   }
   ?>
 
+  <?php
+  // Notices (only when something actually happened)
+  if ($saved && !$errors): ?>
+    <div class="notice ok">Saved changes.</div>
+  <?php endif; ?>
+  <?php if ($flash): ?>
+    <div class="notice ok"><?= e($flash) ?></div>
+  <?php endif; ?>
+  <?php if ($errors): ?>
+    <div class="notice err"><?= e(implode("\n", $errors)) ?></div>
+  <?php endif; ?>
+
+  <?php if (!empty($u['pending_email'])): ?>
+    <div class="notice" style="background:#fff7e6;border:1px solid #ffd27a">
+      You’ve requested to change your email to <strong><?= e($u['pending_email']) ?></strong>.
+      Please check your inbox and confirm. Your current email remains active until you confirm.
+      <form method="post" style="display:inline-block;margin-left:8px">
+        <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+        <input type="hidden" name="form" value="resend_verification">
+        <button class="btn" style="height:28px;padding:0 10px;font-size:12px">Resend confirmation</button>
+      </form>
+      <form method="post" style="display:inline-block;margin-left:8px">
+        <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
+        <input type="hidden" name="form" value="cancel_pending">
+        <button class="btn danger" style="height:28px;padding:0 10px;font-size:12px">Cancel</button>
+      </form>
+    </div>
+  <?php endif; ?>
+
   <!-- Basics card (username/email/phone) -->
   <form method="post" class="card" autocomplete="on">
     <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
@@ -191,17 +200,15 @@ ob_start();
         <span class="inline-pill">@</span>
         <input type="text" name="handle" value="<?= e($u['handle'] ?? '') ?>" placeholder="yourname" style="max-width:240px">
       </div>
+      <div class="muted" style="margin-top:6px">3–20 chars, letters/numbers/underscore only. Changes your public URL.</div>
       <?php
-        // Remaining username changes / cooldown hint
-        $info = can_change_username((int)$u['id']);
-        $c = db()->prepare("SELECT count(*) FROM username_changes WHERE user_id=:uid AND changed_at >= now() - INTERVAL '14 days'");
-        $c->execute([':uid'=>$u['id']]);
-        $used = (int)$c->fetchColumn();
-        $left = max(0, 2 - $used);
-        if ($info['allowed']) {
-          echo '<div class="muted" style="margin-top:4px">You can change your username ' . $left . ' more time(s) in the next 14 days.</div>';
-        } else {
-          echo '<div class="muted" style="margin-top:4px">Limit reached. Try again after ' . e(date('Y-m-d H:i', strtotime($info['next_at']))) . '.</div>';
+        // Show limit/cooldown ONLY if user attempted to change username this submit
+        if ($attempted_username) {
+          $info = can_change_username((int)$u['id']);
+          if (!$info['allowed']) {
+            echo '<div class="muted" style="margin-top:4px">Limit reached. Try again after ' .
+                 e(date('Y-m-d H:i', strtotime($info['next_at']))) . '.</div>';
+          }
         }
       ?>
     </div>
@@ -209,13 +216,17 @@ ob_start();
     <div class="row">
       <label>Email</label>
       <input type="email" name="email" value="<?= e($u['email'] ?? '') ?>" placeholder="you@example.com">
-      <div class="muted" style="margin-top:6px">We’ll send a confirmation to the new email. Your current email stays active until you confirm.</div>
+      <?php if ($attempted_email): ?>
+        <div class="muted" style="margin-top:6px">
+          We’ll send a confirmation to the new email. Your current email stays active until you confirm.
+        </div>
+      <?php endif; ?>
     </div>
 
     <?php if (function_exists('table_has_column') && table_has_column(db(),'users','phone')): ?>
     <div class="row">
       <label>Phone</label>
-      <input type="tel" name="phone" value="<?= e($u['phone'] ?? '') ?>" placeholder="(555) 555-5555">
+      <input type="tel" name="phone" value="<?= e($u['phone'] ?? '') ?>" placeholder="(800) 233-3455">
     </div>
     <?php endif; ?>
 
@@ -246,6 +257,7 @@ ob_start();
     </div>
   </form>
 </div>
+
 <?php
 $content = ob_get_clean();
 require __DIR__ . '/../views/layout.php';
