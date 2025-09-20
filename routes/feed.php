@@ -42,8 +42,19 @@ function initial_for(?string $s): string {
 ob_start();
 ?>
 <div class="feed-wrap">
-  <h1>Trending pages</h1>
+  <?php $me = current_user(); // null if guest ?>
+    <div class="feed-head">
+      <h1>Trending pages</h1>
 
+      <div class="feed-actions">
+        <?php if ($me): ?>
+          <a class="btn btn-cta" href="/pages/new">New Page</a>
+        <?php else: ?>
+          <a class="btn btn-cta" href="/login?next=%2Fpages%2Fnew">New Page</a>
+        <?php endif; ?>
+      </div>
+    </div>
+        
   <?php if (!$pages): ?>
     <div class="notice">No public pages yet.</div>
   <?php else: ?>

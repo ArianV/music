@@ -318,3 +318,38 @@ select {
   display: flex; gap: 8px; font-size: 12px; opacity: .8; margin-top: 8px;
 }
 .card-stats[data-empty="1"]{ display: none; }  /* hide if empty */
+
+/* ===== Feed header + "New Page" button ===== */
+.feed-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin: 8px 0 16px;
+}
+.feed-head h1{
+  margin:0;
+}
+
+.feed-actions .btn-cta{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 14px;
+  border-radius:10px;
+  font-weight:700;
+  text-decoration:none;
+  background: linear-gradient(180deg, #37e8a1, #1fc77f);
+  color:#081c12;
+  border:1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 4px 18px rgba(31, 199, 127, 0.35);
+  transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+}
+.feed-actions .btn-cta:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 8px 28px rgba(31, 199, 127, 0.45);
+  filter: saturate(1.1);
+}
+.feed-actions .btn-cta:active{
+  transform: translateY(0);
+}
