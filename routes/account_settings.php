@@ -25,13 +25,6 @@ if (!function_exists('handle_is_valid')) {
     return (bool) preg_match('/^[a-z0-9_]{3,20}$/', $h);
   }
 }
-if (!function_exists('clean_phone')) {
-  function clean_phone($p) {
-    if ($p === null || $p === '') return null;
-    $p = preg_replace('/\D+/', '', (string)$p);
-    return $p ?: null;
-  }
-}
 
 // UI flags: only show hints AFTER user actually attempts a change
 $attempted_username = false;
@@ -51,7 +44,6 @@ ob_start();
     if ($which === 'basics') {
       $email_in  = trim($_POST['email'] ?? '');
       $handle_in = normalize_handle($_POST['handle'] ?? ($u['handle'] ?? ''));
-      $phone_in  = clean_phone($_POST['phone'] ?? null);
 
       // What did the user actually try to change?
       $attempted_username = strcasecmp((string)($u['handle'] ?? ''), $handle_in) !== 0;
@@ -91,9 +83,6 @@ ob_start();
         $sets   = ['handle=:h'];
         $params = [':h'=>$handle_in, ':id'=>$u['id']];
 
-        if (function_exists('table_has_column') && table_has_column(db(),'users','phone')) {
-          $sets[] = 'phone=:p'; $params[':p'] = $phone_in;
-        }
         if (function_exists('table_has_column') && table_has_column(db(),'users','updated_at')) {
           $sets[] = 'updated_at=NOW()';
         }
@@ -194,7 +183,7 @@ ob_start();
     <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
     <input type="hidden" name="form" value="basics">
 
-    <div class="row">
+    <div class="row" style="margin-bottom: 5px;">
       <label>Username</label>
       <div style="display:flex;gap:8px;align-items:center">
         <span class="inline-pill">@</span>
@@ -211,13 +200,6 @@ ob_start();
         </div>
       <?php endif; ?>
     </div>
-
-    <?php if (function_exists('table_has_column') && table_has_column(db(),'users','phone')): ?>
-    <div class="row">
-      <label>Phone</label>
-      <input type="tel" name="phone" value="<?= e($u['phone'] ?? '') ?>" placeholder="(800) 233-3455">
-    </div>
-    <?php endif; ?>
 
     <div class="row">
       <button class="btn" style="margin-top: 15px;" type="submit">Save</button>
