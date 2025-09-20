@@ -146,7 +146,7 @@ ob_start(); ?>
           <span class="pill <?= $isPublic ? 'pill-public':'pill-private' ?>" style="margin-right:10px">
             <?= $isPublic ? 'Public' : 'Private' ?>
           </span>
-          <a class="btn" href="<?= e(asset('profile')) ?>">Edit profile</a>
+          <a class="btn" href="<?= e(asset('profile')) ?>" style="font-size: small;">Edit profile</a>
         <?php endif; ?>
       </div>
 
