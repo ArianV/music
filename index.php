@@ -30,9 +30,9 @@ route('/feed', 'routes/feed.php');
 route('/analytics', 'routes/analytics.php');
 
 // Diagnostic Pages
-route('/diag/persist', 'routes/diag_persist.php');
+// route('/diag/persist', 'routes/diag_persist.php');
 route('/health', 'routes/health.php');
-route('/email-diag', 'routes/email_diag.php');
+// route('/email-diag', 'routes/email_diag.php');
 
 // Email senders
 route('/verify-email',   'routes/verify_email.php');
