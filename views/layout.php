@@ -138,7 +138,7 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
       <?php if ($me): ?>
         <a class="link" href="<?= e(asset('feed')) ?>">Feed</a>
         <a class="link" href="<?= e(asset('dashboard')) ?>">Dashboard</a>
-        <a class="link" href="<?= e(asset('analytics')) ?>" style="color: blue;">Creator Tools</a>
+        <a class="link" href="<?= e(asset('analytics')) ?>" style="color: #0087ff;">Creator Tools</a>
         <a class="link" href="<?= e(asset('/pages/new')) ?>">New Page</a>
 
         <div class="nav-user">
