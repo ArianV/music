@@ -293,6 +293,16 @@ select {
   font-weight: 700; font-size: 22px;
 }
 
+/* Full cover image on song pages */
+.card-media.full {
+  padding-top: 0;         /* remove forced aspect */
+  height: auto;
+  aspect-ratio: auto;     /* let natural image ratio take over */
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
 /* text area */
 .card-body{ padding: 12px 14px 14px; }
 

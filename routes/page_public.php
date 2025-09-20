@@ -208,7 +208,7 @@ if (!$is_public && $is_owner) {
 
 ob_start(); ?>
 <article class="card" style="max-width:340px;margin:24px auto;">
-  <div class="card-media">
+  <div class="card-media.full">
     <?php if ($cover): ?>
       <img class="cover" src="<?= e($cover) ?>" alt="<?= e($title) ?>">
     <?php else: ?>
