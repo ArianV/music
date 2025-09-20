@@ -138,7 +138,6 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
       <?php if ($me): ?>
         <a class="link" href="<?= e(asset('feed')) ?>">Feed</a>
         <a class="link" href="<?= e(asset('dashboard')) ?>">Dashboard</a>
-        <a class="link" href="<?= e(asset('analytics')) ?>" style="color: #0087ff;">Creator Tools</a>
         <a class="link" href="<?= e(asset('/pages/new')) ?>">New Page</a>
 
         <div class="nav-user">
@@ -151,6 +150,7 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
           </button>
           <div class="menu" id="navMenu" hidden>
             <a href="<?= e($myProfileUrl) ?>">My profile</a>
+            <a href="<?= e(asset('analytics')) ?>" style="color: #0087ff;">Creator Tools</a>
             <a href="<?= e(asset('settings')) ?>">Settings</a>
             <hr>
             <a href="<?= e(asset('logout')) ?>">Logout</a>
