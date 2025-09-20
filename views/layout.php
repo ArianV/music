@@ -95,7 +95,7 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
 </head>
 <body>
   <header class="nav">
-    <a class="brand" href="<?= e(asset($me ? 'dashboard' : '')) ?>">
+    <a class="brand" href="<?= e(asset($me ? 'feed' : '')) ?>">
       <!-- Inline PlugBio mark (teal) -->
       <svg class="logo" viewBox="0 0 24 24" aria-hidden="true">
         <!-- simple “plug” mark with a subtle face notch; uses currentColor (teal via CSS) -->
