@@ -242,3 +242,77 @@ select {
   border-radius: 8px;
   padding: 10px;
 }
+
+/* === Feed grid & cards === */
+.feed-wrap {
+  max-width: 1120px;
+  margin: 32px auto;
+  padding: 0 16px;
+}
+
+.grid.grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.card-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.card-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+  border-color: rgba(255,255,255,0.14);
+}
+
+.card-media {
+  width: 100%;
+  padding-top: 56%; /* 16:9 aspect */
+  background-size: cover;
+  background-position: center;
+}
+
+.card-media.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(80% 80% at 20% 20%, rgba(64,255,172,0.25), rgba(64,255,172,0.05) 60%, transparent 100%);
+  color: rgba(255,255,255,0.7);
+  font-weight: 700;
+  font-size: 24px;
+  letter-spacing: 0.5px;
+}
+
+.card-body {
+  padding: 12px 14px 14px;
+}
+
+.card-title {
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.2;
+  margin: 2px 0 6px;
+}
+
+.card-meta {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.card-stats {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  opacity: 0.8;
+  margin-top: 10px;
+}
+
+/* hide stats row if it's empty or all zeros (optional) */
+.card-stats[data-empty="1"] { display: none; }
