@@ -79,7 +79,7 @@ ob_start();
       if (!$errors && $attempted_username) {
         $gate = can_change_username((int)$u['id']);
         if (!$gate['allowed']) {
-          $when = $gate['next_at'] ? date('d-m-Y', strtotime($gate['next_at'])) : 'later';
+          $when = $gate['next_at'] ? date('m-d-Y', strtotime($gate['next_at'])) : 'later';
           $errors[] = "You’ve reached the limit (2 changes per 14 days). Try again after $when.";
         }
       }
@@ -220,7 +220,7 @@ ob_start();
     <?php endif; ?>
 
     <div class="row">
-      <button class="btn" type="submit">Save</button>
+      <button class="btn" style="margin-top: 15px;" type="submit">Save</button>
     </div>
   </form>
 
@@ -242,7 +242,7 @@ ob_start();
       <input type="password" name="repeat_password" autocomplete="new-password">
     </div>
     <div class="row">
-      <button class="btn" type="submit">Change Password</button>
+      <button class="btn" style="margin-top: 15px;" type="submit">Change Password</button>
     </div>
   </form>
 </div>
