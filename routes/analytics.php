@@ -63,7 +63,7 @@ ob_start();
             <?php foreach ($rows as $r): ?>
               <tr>
                 <td style="padding:8px 6px;">
-                  <a href="<?= e(!empty($r['slug']) ? '/page/'.urlencode($r['slug']) : '/page?id='.$r['id']) ?>">
+                  <a href="<?= e(!empty($r['slug']) ? '/s/'.urlencode($r['slug']) : '/s?id='.$r['id']) ?>">
                     <?= e($r['title'] ?: 'Untitled') ?>
                   </a>
                 </td>

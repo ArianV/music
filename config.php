@@ -520,7 +520,6 @@ function record_page_view(int $page_id): void {
   $sql = "
     INSERT INTO page_views (page_id, user_id, session_key, user_agent, ref_host)
     VALUES (:pid, :uid, :sk, :ua, :rh)
-    ON CONFLICT ON CONSTRAINT uq_page_views_unique_daily DO NOTHING
   ";
   try {
     $st = db()->prepare($sql);
