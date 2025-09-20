@@ -106,8 +106,8 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
 
     <div class="nav-right">
       <?php if ($me): ?>
+        <a class="link" href="<?= e(asset('feed')) ?>">Feed</a>
         <a class="link" href="<?= e(asset('dashboard')) ?>">Dashboard</a>
-        <a class="link" href="<?= e(asset('pages/new')) ?>">New Page</a>
 
         <div class="nav-user">
           <button class="avatar-btn" id="navAvatarBtn" aria-haspopup="menu" aria-expanded="false" aria-label="Open user menu">

@@ -26,6 +26,7 @@ route('/logout', 'routes/logout.php');
 route('/pages/new', 'routes/pages_new.php');
 route('/profile', 'routes/profile_edit.php'); 
 route('/settings', 'routes/account_settings.php');
+route('/feed', 'routes/feed.php');
 
 // Diagnostic Pages
 route('/diag/persist', 'routes/diag_persist.php');
