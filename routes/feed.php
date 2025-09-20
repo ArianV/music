@@ -55,6 +55,8 @@ ob_start();
       </div>
     </div>
         
+    <hr style="margin: 40px 0px 40px 0px;">
+
   <?php if (!$pages): ?>
     <div class="notice">No public pages yet.</div>
   <?php else: ?>
