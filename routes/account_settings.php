@@ -190,7 +190,7 @@ ob_start();
   <?php endif; ?>
 
   <!-- Basics card (username/email/phone) -->
-  <form method="post" class="card" autocomplete="on">
+  <form method="post" class="card" autocomplete="on" style="margin-top: 10px !important;">
     <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
     <input type="hidden" name="form" value="basics">
 
@@ -225,7 +225,7 @@ ob_start();
   </form>
 
   <!-- Password card -->
-  <form method="post" class="card" autocomplete="off">
+  <form method="post" class="card" autocomplete="off" style="margin-top: 25px !important;">
     <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
     <input type="hidden" name="form" value="password">
 
