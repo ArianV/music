@@ -79,7 +79,7 @@ ob_start();
       if (!$errors && $attempted_username) {
         $gate = can_change_username((int)$u['id']);
         if (!$gate['allowed']) {
-          $when = $gate['next_at'] ? date('H:i m-d-Y', strtotime($gate['next_at'])) : 'later';
+          $when = $gate['next_at'] ? date('d-m-Y', strtotime($gate['next_at'])) : 'later';
           $errors[] = "You’ve reached the limit (2 changes per 14 days). Try again after $when.";
         }
       }
