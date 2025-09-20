@@ -7,7 +7,7 @@ ini_set('display_errors', '0');   // don’t leak to users
 ini_set('log_errors', '1');
 
 if (current_user()) {
-  header('Location: ' . asset('dashboard'));
+  header('Location: ' . asset('feed'));
   exit;
 }
 
@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($u && password_verify($pw, (string)($u['password_hash'] ?? ''))) {
       $_SESSION['user_id'] = (int)$u['id'];
-      header('Location: ' . asset('dashboard'));
+      header('Location: ' . asset('feed'));
       exit;
     }
     $err = 'Invalid credentials.';
