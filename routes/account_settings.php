@@ -71,7 +71,7 @@ ob_start();
       if (!$errors && $attempted_username) {
         $gate = can_change_username((int)$u['id']);
         if (!$gate['allowed']) {
-          $when = $gate['next_at'] ? date('m-d-Y', strtotime($gate['next_at'])) : 'later';
+          $when = $gate['next_at'] ? date('Y-m-d H:i', strtotime($gate['next_at'])) : 'later';
           $errors[] = "You’ve reached the limit (2 changes per 14 days). Try again after $when.";
         }
       }
@@ -79,14 +79,12 @@ ob_start();
       if (!$errors) {
         $old_handle = $u['handle'] ?? null;
 
-        // update handle/phone immediately
+        // update handle immediately (phone removed)
         $sets   = ['handle=:h'];
         $params = [':h'=>$handle_in, ':id'=>$u['id']];
-
         if (function_exists('table_has_column') && table_has_column(db(),'users','updated_at')) {
           $sets[] = 'updated_at=NOW()';
         }
-
         $sql = 'UPDATE users SET '.implode(', ',$sets).' WHERE id=:id';
         db()->prepare($sql)->execute($params);
 
@@ -178,8 +176,8 @@ ob_start();
     </div>
   <?php endif; ?>
 
-  <!-- Basics card (username/email/phone) -->
-  <form method="post" class="card" autocomplete="on" style="margin-top: 10px !important;">
+  <!-- Basics card (username/email) -->
+  <form method="post" class="card" autocomplete="on">
     <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
     <input type="hidden" name="form" value="basics">
 
@@ -189,6 +187,17 @@ ob_start();
         <span class="inline-pill">@</span>
         <input type="text" name="handle" value="<?= e($u['handle'] ?? '') ?>" placeholder="yourname" style="max-width:240px">
       </div>
+      <div class="muted" style="margin-top:6px">3–20 chars, letters/numbers/underscore only. Changes your public URL.</div>
+      <?php
+        // Show limit/cooldown ONLY if user attempted to change username this submit
+        if ($attempted_username) {
+          $info = can_change_username((int)$u['id']);
+          if (!$info['allowed']) {
+            echo '<div class="muted" style="margin-top:4px">Limit reached. Try again after ' .
+                 e(date('Y-m-d H:i', strtotime($info['next_at']))) . '.</div>';
+          }
+        }
+      ?>
     </div>
 
     <div class="row">
@@ -207,7 +216,7 @@ ob_start();
   </form>
 
   <!-- Password card -->
-  <form method="post" class="card" autocomplete="off" style="margin-top: 25px !important;">
+  <form method="post" class="card" autocomplete="off">
     <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
     <input type="hidden" name="form" value="password">
 
