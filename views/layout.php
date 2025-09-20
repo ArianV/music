@@ -39,7 +39,7 @@ $initial = strtoupper(substr(trim($me['display_name'] ?? $handle ?? 'U'), 0, 1))
   <meta name="description" content="<?= e($desc) ?>">
 
   <!-- Open Graph -->
-  <meta property="og:site_name" content="<?= e($site_name) ?>">
+  <meta property="og:site_name" content="<?= e($brand) ?>">
   <meta property="og:title" content="<?= e($title) ?>">
   <meta property="og:description" content="<?= e($desc) ?>">
   <meta property="og:url" content="<?= e($url) ?>">
