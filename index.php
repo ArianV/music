@@ -18,7 +18,7 @@ if (preg_match('#^/(assets|uploads)/#', $uri)) {
 require_once __DIR__ . '/config.php';
 
 // ---- exact routes
-route('/', 'routes/dashboard.php');
+route('/', 'routes/feed.php');
 route('/dashboard', 'routes/dashboard.php');
 route('/login', 'routes/login.php');
 route('/register', 'routes/register.php');
