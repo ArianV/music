@@ -1,0 +1,26 @@
+# --- HTTPS redirect behind Cloudflare (loop-safe) ---
+RewriteEngine On
+RewriteCond %{HTTP:X-Forwarded-Proto} =http [OR]
+RewriteCond %{HTTP:CF-Visitor} '"scheme":"http"'
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# --- End HTTPS redirect ---
+
+Options -Indexes
+# No RewriteBase: the rules below are relative, so the app works at a domain root
+# or in a subfolder (e.g. http://localhost/music/ under XAMPP).
+
+# Uploads may only ever be served as images (blocks .php, .html, .svg, etc.)
+RewriteRule ^uploads/(?!.*\.(jpe?g|jfif|png|gif|webp|avif)$) - [F,NC]
+
+# Only static assets and uploads are served directly; everything else
+# (including routes/*.php, .git, schema.sql) goes through the router.
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^(assets|uploads)/ - [L]
+RewriteRule ^ index.php [QSA,L]
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "SAMEORIGIN"
+</IfModule>

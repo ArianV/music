@@ -1,0 +1,34 @@
+# --- Site data (created at runtime, never committed) ---
+/data/
+/uploads/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# --- Private: server setup notes, secrets, local overrides ---
+/deploy/
+.env
+.env.*
+config.local.php
+*.pem
+*.key
+
+# --- Backups, dumps, logs ---
+*.log
+*.bak
+*.tgz
+*.tar.gz
+*.zip
+*.sql.gz
+
+# --- Dependencies ---
+/vendor/
+/node_modules/
+
+# --- Editor, OS and tool clutter ---
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db
+desktop.ini
